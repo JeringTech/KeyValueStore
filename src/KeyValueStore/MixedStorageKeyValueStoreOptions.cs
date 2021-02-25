@@ -13,12 +13,10 @@ namespace Jering.KeyValueStore
         public int PageSizeBits { get; set; } = 25; // 33.5 MB pages
         public int MemorySizeBits { get; set; } = 26; // 67 MB
         public int SegmentSizeBits { get; set; } = 28; // 250 MB
-        public int TimeBetweenCompactionsMS { get; set; } = 10000;
+        //public int TimeBetweenCompactionsMS { get; set; } = 10000;
+        //public int NumReadOnlyRecordsBeforeCompaction { get; set; } = 10000;
 
         public long LogDiskSpaceBytes { get; set; } = 1L << 28; // 250 MB
         public bool DeleteLogOnClose { get; set; } = true;
-
-        public long ObjectLogDiskSpaceBytes { get; set; } = 1L << 28; // 250 MB
-        public bool DeleteObjectLogOnClose { get; set; } = true;
     }
 }

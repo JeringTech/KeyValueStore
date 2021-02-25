@@ -1,4 +1,4 @@
-﻿using System;
+﻿using BenchmarkDotNet.Running;
 
 namespace Jering.KeyValueStore.Performance
 {
@@ -6,7 +6,8 @@ namespace Jering.KeyValueStore.Performance
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            //BenchmarkRunner.Run<LowMemoryUsageBenchmarks>();
+            BenchmarkRunner.Run<NormalMemoryUsageBenchmarks>();
         }
     }
 }

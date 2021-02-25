@@ -31,6 +31,6 @@ namespace Jering.KeyValueStore
         /// </summary>
         /// <param name="key"></param>
         /// <exception cref="ObjectDisposedException">Thrown if the instance is disposed.</exception>
-        ValueTask<(Status, TValue)> ReadAsync(TKey key);
+        ValueTask<(Status, TValue?)> ReadAsync(TKey key);
     }
 }

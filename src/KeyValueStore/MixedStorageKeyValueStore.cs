@@ -1,5 +1,7 @@
 ﻿using FASTER.core;
+using MessagePack;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading.Tasks;
@@ -13,25 +15,22 @@ namespace Jering.KeyValueStore
     {
         private static readonly MixedStorageKeyValueStoreOptions _defaultOptions = new();
 
-        // Serialization
-        private static readonly SimpleFunctions<TKey, TValue> _simpleFunctions = new();
+        // Faster store
+        private FasterKV<TKey, SpanByte> _fasterKVStore;
 
-        // Logs
-        private readonly LogAccessor<TKey, TValue> _logAccessor;
-        private readonly int _timeBetweenCompactionsMS;
-        private IDevice _logDevice;
-        private IDevice _objectLogDevice;
+        // Sessions
+        private ConcurrentQueue<ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>>> _sessionPool = new();
 
-        // Thread local session
-        [ThreadStatic]
-        private static ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>>? _session;
+        // Log
+        private LogAccessor<TKey, SpanByte> _logAccessor;
+        private IDevice? _logDevice;
 
-        // Shared pool
-        private static readonly ConcurrentQueue<ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>>> _sessionPool = new();
+        //// Log compaction
+        //private readonly int _timeBetweenCompactionsMS;
+        //private readonly int _numReadOnlyRecordsBeforeCompation;
+        //private CancellationTokenSource _compactionCancellationTokenSource;
 
         // Disposal
-        private static readonly ConcurrentBag<ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>>> _allSessions = new();
-        private readonly FasterKV<TKey, TValue> _fasterKVStore;
         private bool _disposed;
 
         /// <summary>
@@ -40,20 +39,24 @@ namespace Jering.KeyValueStore
         public MixedStorageKeyValueStore(MixedStorageKeyValueStoreOptions? options = null)
         {
             options ??= _defaultOptions;
-            (SerializerSettings<TKey, TValue> serializerSettings, LogSettings LogSettings) = CreateSettings(options);
-            _fasterKVStore = new(options.IndexNumBuckets, LogSettings, serializerSettings: serializerSettings);
+            LogSettings LogSettings = CreateSettings(options);
+            _fasterKVStore = new(options.IndexNumBuckets, LogSettings);
             _logAccessor = _fasterKVStore.Log;
-            _timeBetweenCompactionsMS = options.TimeBetweenCompactionsMS;
+
+            //_timeBetweenCompactionsMS = options.TimeBetweenCompactionsMS;
+            //_numReadOnlyRecordsBeforeCompation = options.NumReadOnlyRecordsBeforeCompaction;
+            //_compactionCancellationTokenSource = new CancellationTokenSource();
+            //Task.Run(CompactionLoop);
         }
 
         /// <summary>
         /// Creates a <see cref="MixedStorageKeyValueStore{TKey, TValue}"/>.
         /// </summary>
-        public MixedStorageKeyValueStore(FasterKV<TKey, TValue> fasterKVStore,
+        public MixedStorageKeyValueStore(FasterKV<TKey, SpanByte> fasterKVStore,
             int timeBetweenCompactionsMS = 10000) // Attempt log compaction every 10 seconds
         {
             _fasterKVStore = fasterKVStore;
-            _timeBetweenCompactionsMS = timeBetweenCompactionsMS;
+            //_timeBetweenCompactionsMS = timeBetweenCompactionsMS;
             _logAccessor = _fasterKVStore.Log;
         }
 
@@ -65,7 +68,21 @@ namespace Jering.KeyValueStore
                 throw new ObjectDisposedException(nameof(MixedStorageKeyValueStore<TKey, TValue>));
             }
 
-            GetSession().Upsert(key, obj);
+            byte[] objBytes = MessagePackSerializer.Serialize(obj);
+
+            // TODO Consider ThreadLocal session for synchronous operations after Faster stabilizes
+            ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = GetPooledSession();
+
+            unsafe
+            {
+                fixed (byte* pointer = objBytes)
+                {
+                    var spanByte = SpanByte.FromFixedSpan(objBytes);
+                    session.Upsert(key, spanByte);
+                }
+            }
+
+            _sessionPool.Enqueue(session);
         }
 
         /// <inheritdoc />
@@ -76,64 +93,50 @@ namespace Jering.KeyValueStore
                 throw new ObjectDisposedException(nameof(MixedStorageKeyValueStore<TKey, TValue>));
             }
 
-            return GetSession().Delete(key);
+            // TODO Consider ThreadLocal session for synchronous operations after Faster stabilizes
+            ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = GetPooledSession();
+
+            Status result = session.Delete(key);
+
+            _sessionPool.Enqueue(session);
+
+            return result;
         }
 
         /// <inheritdoc />
-        public async ValueTask<(Status, TValue)> ReadAsync(TKey key)
+        public async ValueTask<(Status, TValue?)> ReadAsync(TKey key)
         {
             if (_disposed)
             {
                 throw new ObjectDisposedException(nameof(MixedStorageKeyValueStore<TKey, TValue>));
             }
 
-            ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>>? session = GetSession();
-            ValueTask<FasterKV<TKey, TValue>.ReadAsyncResult<TValue, TValue, Empty>> readAsyncResult = session.ReadAsync(key);
+            ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = GetPooledSession();
 
-            // Retain thread-local in sync path.
-            // This speed ups in-memory reads at the cost of slightly slower disk reads.
-            if (readAsyncResult.IsCompleted)
-            {
-                return readAsyncResult.Result.Complete();
-            }
+            (Status status, SpanByteAndMemory spanByteAndMemory) = (await session.ReadAsync(key).ConfigureAwait(false)).Complete();
 
-            // Going async - remove session from thread-local.
-            // If we don't do this, the session is captured by the continuation, which may run on a different thread.
-            // If that happens, we might erroneously use a session from multiple threads at the same time. 
-            // - https://github.com/microsoft/FASTER/issues/403#issuecomment-781408293
-            _session = null;
-            (Status, TValue) result = (await readAsyncResult.ConfigureAwait(false)).Complete();
+            using IMemoryOwner<byte> memoryOwner = spanByteAndMemory.Memory;
 
-            // Return session to shared pool on async thread
+            (Status status, TValue?) result = (status, status != Status.OK ? default : MessagePackSerializer.Deserialize<TValue>(memoryOwner.Memory));
+
             _sessionPool.Enqueue(session);
+
             return result;
         }
 
-        internal virtual ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>> GetSession()
+        internal virtual ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> GetPooledSession()
         {
-            if (_session != null)
+            if (_sessionPool.TryDequeue(out ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>>? result))
             {
-                return _session;
+                return result;
             }
 
-            if (_sessionPool.TryDequeue(out ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>>? result))
-            {
-                return _session = result;
-            }
-
-            ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>>? session = _fasterKVStore.For(_simpleFunctions).NewSession<SimpleFunctions<TKey, TValue>>();
-            _allSessions.Add(session);
-            return _session = session;
+            // SpanByteFunctions<> isn't reusable. If we reuse instances, we get NullReferenceExceptions
+            return _fasterKVStore.For(new SpanByteFunctions<TKey>()).NewSession<SpanByteFunctions<TKey>>();
         }
 
-        internal virtual (SerializerSettings<TKey, TValue>, LogSettings) CreateSettings(MixedStorageKeyValueStoreOptions options)
+        internal virtual LogSettings CreateSettings(MixedStorageKeyValueStoreOptions options)
         {
-            // Serializer settings
-            var serializerSettings = new SerializerSettings<TKey, TValue>
-            {
-                valueSerializer = () => new DefaultBinaryObjectSerializer<TValue>()
-            };
-
             // Log settings
             string logDirectory = options.LogDirectory ?? Path.Combine(Path.GetTempPath(), "FasterLogs");
             string logFileName = options.LogFileName ?? Guid.NewGuid().ToString();
@@ -147,18 +150,46 @@ namespace Jering.KeyValueStore
                 SegmentSizeBits = options.SegmentSizeBits
             };
 
-            // ObjectLogDevice only necessary for non-fixed size structs and reference types.
-            // TODO We're creating the object log device for all structs. Figure out how to detect if struct is fixed size.
-            // TODO Alternatives for variable length structs - https://microsoft.github.io/FASTER/docs/fasterkv-basics/#handling-variable-length-keys-and-values
-            if (!typeof(TValue).IsValueType || !typeof(TValue).IsPrimitive)
-            {
-                logSettings.ObjectLogDevice = _objectLogDevice = Devices.CreateLogDevice(Path.Combine(logDirectory, $"{logFileName}.obj.log"),
-                    deleteOnClose: options.DeleteObjectLogOnClose,
-                    capacity: options.ObjectLogDiskSpaceBytes);
-            }
-
-            return (serializerSettings, logSettings);
+            return logSettings;
         }
+
+        //internal virtual async Task CompactionLoop()
+        //{
+        //    CancellationToken cancellationToken = _compactionCancellationTokenSource.Token;
+
+        //    while (!_disposed && !cancellationToken.IsCancellationRequested)
+        //    {
+        //        try
+        //        {
+        //            await Task.Delay(_timeBetweenCompactionsMS, cancellationToken);
+
+        //            // (oldest entries here) BeginAddress <= HeadAddress (where the in-memory region begins) <= SafeReadOnlyAddress (entries between here and tail updated in-place) < TailAddress (entries added here)
+        //            if ((_logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress) / _logAccessor.FixedRecordSize < _numReadOnlyRecordsBeforeCompation)
+        //            {
+        //                continue;
+        //            }
+
+        //            long compactUntilAddress = (long)(_logAccessor.BeginAddress + 0.2 * (_logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress));
+
+        //            ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = GetPooledSession();
+
+        //            session.Compact(compactUntilAddress, true);
+
+        //            _sessionPool.Enqueue(session);
+        //        }
+        //        catch (OperationCanceledException)
+        //        {
+        //            return;
+        //        }
+        //        catch
+        //        {
+        //            // Compaction failed or we disposed the instance. If we disposed the instance we could get a NullReferenceException since _sessionPool
+        //            // may be null, we could also get an ObjectDisposedException since sessions may be disposed.
+
+        //            // TODO we should log here
+        //        }
+        //    }
+        //}
 
         /// <summary>
         /// Disposes this instance. This method is not thread-safe. It should only be called after all other calls to this instance's methods have returned.
@@ -179,14 +210,37 @@ namespace Jering.KeyValueStore
             {
                 if (disposing)
                 {
-                    foreach (ClientSession<TKey, TValue, TValue, TValue, Empty, SimpleFunctions<TKey, TValue>> session in _allSessions)
+                    //_compactionCancellationTokenSource?.Cancel();
+
+                    foreach (ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session in _sessionPool)
                     {
                         session.Dispose();
                     }
 
-                    _fasterKVStore?.Dispose(); // Only safe to call after disposing all sessions
+                    // We might dispose of the instance while compacting.This means the session used to compact
+                    // may not get disposed, which in turn means disposing of the Faster store might throw
+                    // (requires sessions be disposed before it's disposed).
+                    // Just catch for now, it's all managed resources anyway.
+                    //
+                    // TODO Consider a SemaphoreSlim if this approach fails.
+                    try
+                    {
+                        _fasterKVStore?.Dispose(); // Only safe to call after disposing all sessions
+                    }
+                    catch
+                    {
+                        // Do nothing
+                    }
                     _logDevice?.Dispose();
-                    _objectLogDevice?.Dispose();
+
+#pragma warning disable CS8625
+                    // TODO If we don't set _logDevice to null here and we don't add a using block to DeletesLogFilesOnDispose,
+                    // integration tests fail when run together. Most likely an issue with its _logDevice's finalizer.
+                    _logDevice = null;
+                    _fasterKVStore = null;
+                    _sessionPool = null;
+                    //_compactionCancellationTokenSource = null;
+#pragma warning restore CS8625
                 }
 
                 _disposed = true;
