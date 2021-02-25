@@ -1,0 +1,20 @@
+trigger:
+- master
+
+resources:
+  repositories:
+  - repository: templates
+    type: github
+    name: JeringTech/DevOps.AzurePipelines
+    endpoint: JeringTech
+
+jobs:
+- template: templates/nuget/main.yml@templates
+  parameters:
+  # TODO
+    codecovKey: "67424e1a-1c96-4db4-8874-bfa35e2d302c"
+    cacheYarnPackages: true
+- template: templates/docs/main.yml@templates
+  parameters:
+    nugetRestoreEndpoints: "https://pkgs.dev.azure.com/JeremyTCD/_packaging/Main/nuget/v2"
+    nugetRestorePats: "$(nugetRestorePats)"

@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31004.235
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jering.KeyValueStore", "src\KeyValueStore\Jering.KeyValueStore.csproj", "{14EC15F7-A4A1-4EDA-BBF1-1552BFE5D3DE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{ACBC1C23-65DD-43D8-A2CD-E1C31BBBA269}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		azure-pipelines.yml = azure-pipelines.yml
+		Changelog.md = Changelog.md
+		codecov.yml = codecov.yml
+		keypair.snk = keypair.snk
+		License.md = License.md
+		NuGet.Config = NuGet.Config
+		ReadMe.md = ReadMe.md
+		ThirdPartyLicenses.md = ThirdPartyLicenses.md
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jering.KeyValueStore.Tests", "test\Jering.KeyValueStore.Tests\Jering.KeyValueStore.Tests.csproj", "{E9076F85-1A7C-4F15-84EF-BE8A0F1C39C2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jering.KeyValueStore.Performance", "Jering.KeyValueStore.Performance\Jering.KeyValueStore.Performance.csproj", "{598002AB-E266-407F-9587-D14CE341C04B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{14EC15F7-A4A1-4EDA-BBF1-1552BFE5D3DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14EC15F7-A4A1-4EDA-BBF1-1552BFE5D3DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14EC15F7-A4A1-4EDA-BBF1-1552BFE5D3DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14EC15F7-A4A1-4EDA-BBF1-1552BFE5D3DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E9076F85-1A7C-4F15-84EF-BE8A0F1C39C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E9076F85-1A7C-4F15-84EF-BE8A0F1C39C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E9076F85-1A7C-4F15-84EF-BE8A0F1C39C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E9076F85-1A7C-4F15-84EF-BE8A0F1C39C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{598002AB-E266-407F-9587-D14CE341C04B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{598002AB-E266-407F-9587-D14CE341C04B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{598002AB-E266-407F-9587-D14CE341C04B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{598002AB-E266-407F-9587-D14CE341C04B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {333D3ECF-5EEE-4057-A2C6-3D2CE7618E4B}
+	EndGlobalSection
+EndGlobal
