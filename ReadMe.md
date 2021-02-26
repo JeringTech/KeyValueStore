@@ -4,13 +4,13 @@ A key-value store. Thin wrapper of [Microsoft.Faster](https://github.com/microso
 Faster's complexities, namely:
 
 - Sessions
-- Binary serialization,
+- Binary serialization
 - Use of `SpanByte`
-- Log compaction
 - Disposal
 - Configuration for general use
+- TODO Log compaction
 
-Initial key value store is functional. Package isn't published yet. This readme is a template at the moment.
+`MixedStorageKVStore` is functional but the package Jering.KeyValueStore hasn't been published. The rest of this readme is a template.
 
 # Jering.KeyValueStore
 [![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/Jering.KeyValueStore-CI?branchName=master)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=1?branchName=master)
@@ -32,6 +32,7 @@ Initial key value store is functional. Package isn't published yet. This readme 
 [About](#about)  
 
 ## Overview
+TODO
 
 ## Target Frameworks
 - .NET Standard 2.1
@@ -50,24 +51,33 @@ Using .Net CLI:
 ```
 
 ## Usage
+TODO
 
 ## API
+<!-- GENERATED_API_DOCS_START -->
+
+<!-- GENERATED_API_DOCS_END -->
 
 ## Performance
+TODO
 
 ## Building and Testing
 You can build and test this project in Visual Studio 2019.
 
 ## Alternatives
-MemoryCache
+<!-- TODO pros/cons -->
 
-SQLite
+- [ManagedEsent `PersistentDictionary`](https://github.com/microsoft/ManagedEsent/blob/master/Documentation/PersistentDictionaryDocumentation.md)
 
-LiteDB
+- [SQLite](https://docs.microsoft.com/en-us/dotnet/standard/data/sqlite/?tabs=netcore-cli)
 
-https://github.com/microsoft/ManagedEsent
+- [LiteDB](https://www.litedb.org/)
+
+- [MemoryCache](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.caching.memorycache?view=dotnet-plat-ext-5.0)
 
 ## Related Concepts
+### Faster Basics
+TODO
 
 ## Contributing
 Contributions are welcome!
