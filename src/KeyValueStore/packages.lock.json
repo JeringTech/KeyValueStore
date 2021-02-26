@@ -18,6 +18,16 @@
           "System.Threading.Tasks.Extensions": "4.5.3"
         }
       },
+      "Microsoft.FASTER.Core": {
+        "type": "Direct",
+        "requested": "[1.8.1, )",
+        "resolved": "1.8.1",
+        "contentHash": "hx4rCI9nuuEFIIrLZf661IsUpnF6YAd2XhnHJwNdKXGK0JlQ/loxsRO1vZi74dqwUpG3a3JVkeuuxIAkzb3zUA==",
+        "dependencies": {
+          "System.Interactive.Async": "4.1.1",
+          "System.Runtime.CompilerServices.Unsafe": "4.7.1"
+        }
+      },
       "MessagePack.Annotations": {
         "type": "Transitive",
         "resolved": "2.2.85",
@@ -90,13 +100,6 @@
         "contentHash": "+MvhNtcvIbqmhANyKu91jQnvIRVSTiaOiFNfKWwXGHG48YAb4I/TyH8spsySiPYla7gKal5ZnF3teJqZAximyQ==",
         "dependencies": {
           "System.Runtime.CompilerServices.Unsafe": "4.5.2"
-        }
-      },
-      "faster.core": {
-        "type": "Project",
-        "dependencies": {
-          "System.Interactive.Async": "4.1.1",
-          "System.Runtime.CompilerServices.Unsafe": "4.7.1"
         }
       }
     }
