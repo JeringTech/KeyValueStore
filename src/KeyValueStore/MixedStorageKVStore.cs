@@ -10,11 +10,11 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     /// <summary>
-    /// The default implementation of <see cref="IMixedStorageKeyValueStore{TKey, TValue}"/>.
+    /// The default implementation of <see cref="IMixedStorageKVStore{TKey, TValue}"/>.
     /// </summary>
-    public class MixedStorageKeyValueStore<TKey, TValue> : IMixedStorageKeyValueStore<TKey, TValue>
+    public class MixedStorageKVStore<TKey, TValue> : IMixedStorageKVStore<TKey, TValue>
     {
-        private static readonly MixedStorageKeyValueStoreOptions _defaultMixedStorageKeyValueStoreOptions = new();
+        private static readonly MixedStorageKVStoreOptions _defaultMixedStorageKVStoreOptions = new();
 
         // Faster store
         private readonly FasterKV<TKey, SpanByte> _fasterKVStore;
@@ -37,16 +37,16 @@ namespace Jering.KeyValueStore
         private readonly IDevice? _logDevice;
 
         /// <summary>
-        /// Creates a <see cref="MixedStorageKeyValueStore{TKey, TValue}"/>.
+        /// Creates a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
         /// </summary>
-        public MixedStorageKeyValueStore(MixedStorageKeyValueStoreOptions? mixedStorageKeyValueStoreOptions = null)
+        public MixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKeyValueStoreOptions = null)
         {
-            mixedStorageKeyValueStoreOptions ??= _defaultMixedStorageKeyValueStoreOptions;
-            LogSettings LogSettings = CreateSettings(mixedStorageKeyValueStoreOptions);
+            mixedStorageKeyValueStoreOptions ??= _defaultMixedStorageKVStoreOptions;
+            LogSettings logSettings = CreateSettings(mixedStorageKeyValueStoreOptions);
 
-            _fasterKVStore = new(mixedStorageKeyValueStoreOptions.IndexNumBuckets, LogSettings);
+            _fasterKVStore = new(mixedStorageKeyValueStoreOptions.IndexNumBuckets, logSettings);
             _clientSessionBuilder = _fasterKVStore.For(_spanByteFunctions);
-            _logDevice = LogSettings.LogDevice; // _fasterKVStore.dispose doesn't dispose the underlying log device, so hold a reference for manual disposal
+            _logDevice = logSettings.LogDevice; // _fasterKVStore.dispose doesn't dispose the underlying log device, so hold a reference for manual disposal
 
             _logAccessor = _fasterKVStore.Log;
             _messagePackSerializerOptions = mixedStorageKeyValueStoreOptions.MessagePackSerializerOptions;
@@ -56,9 +56,9 @@ namespace Jering.KeyValueStore
         }
 
         /// <summary>
-        /// Creates a <see cref="MixedStorageKeyValueStore{TKey, TValue}"/>.
+        /// Creates a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
         /// </summary>
-        public MixedStorageKeyValueStore(FasterKV<TKey, SpanByte> fasterKVStore,
+        public MixedStorageKVStore(FasterKV<TKey, SpanByte> fasterKVStore,
             MessagePackSerializerOptions? messagePackSerializerOptions = null)
         {
             _fasterKVStore = fasterKVStore;
@@ -66,7 +66,7 @@ namespace Jering.KeyValueStore
             // TODO can we get a reference to the log device?
 
             _logAccessor = _fasterKVStore.Log;
-            _messagePackSerializerOptions = messagePackSerializerOptions ?? _defaultMixedStorageKeyValueStoreOptions.MessagePackSerializerOptions;
+            _messagePackSerializerOptions = messagePackSerializerOptions ?? _defaultMixedStorageKVStoreOptions.MessagePackSerializerOptions;
             _threadLocalArrayBufferWriter = new(CreateArrayBufferWriter, true);
             _threadLocalSession = new(CreateSession, true);
         }
@@ -76,7 +76,7 @@ namespace Jering.KeyValueStore
         {
             if (_disposed)
             {
-                throw new ObjectDisposedException(nameof(MixedStorageKeyValueStore<TKey, TValue>));
+                throw new ObjectDisposedException(nameof(MixedStorageKVStore<TKey, TValue>));
             }
 
             // Serialize
@@ -105,7 +105,7 @@ namespace Jering.KeyValueStore
         {
             if (_disposed)
             {
-                throw new ObjectDisposedException(nameof(MixedStorageKeyValueStore<TKey, TValue>));
+                throw new ObjectDisposedException(nameof(MixedStorageKVStore<TKey, TValue>));
             }
 
             return _threadLocalSession.Value.Delete(key);
@@ -116,7 +116,7 @@ namespace Jering.KeyValueStore
         {
             if (_disposed)
             {
-                throw new ObjectDisposedException(nameof(MixedStorageKeyValueStore<TKey, TValue>));
+                throw new ObjectDisposedException(nameof(MixedStorageKVStore<TKey, TValue>));
             }
 
             ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = GetPooledSession();
@@ -150,7 +150,7 @@ namespace Jering.KeyValueStore
             return new();
         }
 
-        private LogSettings CreateSettings(MixedStorageKeyValueStoreOptions options)
+        private LogSettings CreateSettings(MixedStorageKVStoreOptions options)
         {
             // Log settings
             string logDirectory = string.IsNullOrWhiteSpace(options.LogDirectory) ? Path.Combine(Path.GetTempPath(), "FasterLogs") : options.LogDirectory;
@@ -159,8 +159,7 @@ namespace Jering.KeyValueStore
             var logSettings = new LogSettings
             {
                 LogDevice = Devices.CreateLogDevice(Path.Combine(logDirectory, $"{logFileName}.log"),
-                    deleteOnClose: options.DeleteLogOnClose,
-                    capacity: options.LogDiskSpaceBytes),
+                    deleteOnClose: options.DeleteLogOnClose),
                 PageSizeBits = options.PageSizeBits,
                 MemorySizeBits = options.MemorySizeBits,
                 SegmentSizeBits = options.SegmentSizeBits

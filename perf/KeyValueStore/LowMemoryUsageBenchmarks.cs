@@ -19,8 +19,8 @@ namespace Jering.KeyValueStore.Performance
     [MemoryDiagnoser]
     public class LowMemoryUsageBenchmarks
     {
-        private MixedStorageKeyValueStore<int, string> _mixedStorageKeyValueStore;
-        private MixedStorageKeyValueStoreOptions _mixedStorageKeyValueStoreOptions;
+        private IMixedStorageKVStore<int, string> _mixedStorageKVStore;
+        private MixedStorageKVStoreOptions _mixedStorageKVStoreOptions;
         private const int UPSERT_NUM_OPERATIONS = 1_000_000;
         private const int READ_NUM_OPERATIONS = 10_000;
         private string _dummyValue = "dummyString";
@@ -30,7 +30,7 @@ namespace Jering.KeyValueStore.Performance
         [GlobalSetup(Target = nameof(Upsert_ConcurrentInserts_WithoutCompression))]
         public void Upsert_ConcurrentInserts_WithoutCompression_GlobalSetup()
         {
-            _mixedStorageKeyValueStoreOptions = new()
+            _mixedStorageKVStoreOptions = new()
             {
                 PageSizeBits = 12, // 4 KB
                 MemorySizeBits = 13, // 2 pages
@@ -41,62 +41,33 @@ namespace Jering.KeyValueStore.Performance
         [IterationSetup(Target = nameof(Upsert_ConcurrentInserts_WithoutCompression))]
         public void Upsert_ConcurrentInserts_WithoutCompression_IterationSetup()
         {
-            _mixedStorageKeyValueStore = new MixedStorageKeyValueStore<int, string>(_mixedStorageKeyValueStoreOptions);
+            _mixedStorageKVStore = new MixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
         }
 
         [Benchmark]
         public void Upsert_ConcurrentInserts_WithoutCompression()
         {
-            Parallel.For(0, UPSERT_NUM_OPERATIONS, key => _mixedStorageKeyValueStore.Upsert(key, _dummyValue));
+            Parallel.For(0, UPSERT_NUM_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyValue));
         }
 
         [IterationCleanup(Target = nameof(Upsert_ConcurrentInserts_WithoutCompression))]
         public void Upsert_ConcurrentInserts_WithoutCompression_IterationCleanup()
         {
-            _mixedStorageKeyValueStore.Dispose();
-        }
-
-        // Concurrent inserts with compression
-        [GlobalSetup(Target = nameof(Upsert_ConcurrentInserts_WithCompression))]
-        public void Upsert_ConcurrentInserts_WithCompression_GlobalSetup()
-        {
-            _mixedStorageKeyValueStoreOptions = new()
-            {
-                PageSizeBits = 12, // 4 KB
-                MemorySizeBits = 13, // 2 pages
-            };
-        }
-
-        [IterationSetup(Target = nameof(Upsert_ConcurrentInserts_WithCompression))]
-        public void Upsert_ConcurrentInserts_WithCompression_IterationSetup()
-        {
-            _mixedStorageKeyValueStore = new MixedStorageKeyValueStore<int, string>(_mixedStorageKeyValueStoreOptions);
-        }
-
-        [Benchmark]
-        public void Upsert_ConcurrentInserts_WithCompression()
-        {
-            Parallel.For(0, UPSERT_NUM_OPERATIONS, key => _mixedStorageKeyValueStore.Upsert(key, _dummyValue));
-        }
-
-        [IterationCleanup(Target = nameof(Upsert_ConcurrentInserts_WithCompression))]
-        public void Upsert_ConcurrentInserts_WithCompression_IterationCleanup()
-        {
-            _mixedStorageKeyValueStore.Dispose();
+            _mixedStorageKVStore.Dispose();
         }
 
         // Concurrent reads without compression
         [GlobalSetup(Target = nameof(Upsert_ConcurrentReads_WithoutCompression))]
         public void Upsert_ConcurrentReads_WithoutCompressions_GlobalSetup()
         {
-            _mixedStorageKeyValueStoreOptions = new()
+            _mixedStorageKVStoreOptions = new()
             {
                 PageSizeBits = 12, // 4 KB
                 MemorySizeBits = 13, // 2 pages
                 MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
             };
-            _mixedStorageKeyValueStore = new MixedStorageKeyValueStore<int, string>(_mixedStorageKeyValueStoreOptions);
-            Parallel.For(0, READ_NUM_OPERATIONS, key => _mixedStorageKeyValueStore.Upsert(key, _dummyValue));
+            _mixedStorageKVStore = new MixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
+            Parallel.For(0, READ_NUM_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyValue));
         }
 
         [IterationSetup(Target = nameof(Upsert_ConcurrentReads_WithoutCompression))]
@@ -115,17 +86,17 @@ namespace Jering.KeyValueStore.Performance
             await Task.WhenAll(_readTasks).ConfigureAwait(false);
         }
 
-        private async Task<(Status, string)> ReadAsync(int key)
+        private async Task<(Status, string?)> ReadAsync(int key)
         {
             await Task.Yield();
 
-            return await _mixedStorageKeyValueStore.ReadAsync(key).ConfigureAwait(false);
+            return await _mixedStorageKVStore.ReadAsync(key).ConfigureAwait(false);
         }
 
         [GlobalCleanup(Target = nameof(Upsert_ConcurrentReads_WithoutCompression))]
         public void Upsert_ConcurrentReads_WithoutCompressions_GlobalCleanup()
         {
-            _mixedStorageKeyValueStore.Dispose();
+            _mixedStorageKVStore.Dispose();
         }
     }
 }

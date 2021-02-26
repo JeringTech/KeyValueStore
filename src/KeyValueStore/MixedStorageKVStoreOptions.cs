@@ -5,9 +5,9 @@ using System.IO;
 namespace Jering.KeyValueStore
 {
     /// <summary>
-    /// Options for a <see cref="MixedStorageKeyValueStore{TKey, TValue}"/>.
+    /// Options for a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
     /// </summary>
-    public class MixedStorageKeyValueStoreOptions
+    public class MixedStorageKVStoreOptions
     {
         /// <summary>
         /// <para>The number of buckets in Faster's main index.</para>
@@ -31,19 +31,11 @@ namespace Jering.KeyValueStore
         public int MemorySizeBits { get; set; } = 26; // 67 MB
 
         /// <summary>
-        /// <para>The size of the on-disk region of the log.</para>
-        /// <para>If the log outgrows this region, it is truncated to fit.</para>
-        /// <para>Defaults to 268435456 (268 MB).</para>
-        /// </summary>
-        public long LogDiskSpaceBytes { get; set; } = 1L << 28;
-
-        /// <summary>
         /// <para>The size of a segment of the on-disk region of the log.</para>
         /// <para>The on-disk region of the log is stored across multiple files. Each file is referred to as a segment.</para>
-        /// <para>Truncation that occurs when <see cref="LogDiskSpaceBytes"/> is reached truncates entire segments rather than records within segments.</para>
-        /// <para>Defaults to 24 (16 MB).</para>
+        /// <para>Defaults to 28 (268 MB).</para>
         /// </summary>
-        public int SegmentSizeBits { get; set; } = 20;
+        public int SegmentSizeBits { get; set; } = 28;
 
         /// <summary>
         /// <para>The directory containing the on-disk region of the log.</para>
@@ -53,7 +45,6 @@ namespace Jering.KeyValueStore
         /// <para>Defaults to <c>null</c>.</para>
         /// </summary>
         public string? LogDirectory { get; set; } = null;
-
 
         /// <summary>
         /// <para>The log-file-name prefix.</para>
@@ -66,7 +57,7 @@ namespace Jering.KeyValueStore
         public string? LogFileNamePrefix { get; set; } = null;
 
         /// <summary>
-        /// <para>The value specifying whether log files are deleted when the <see cref="MixedStorageKeyValueStore{TKey, TValue}"/> is disposed or finalized</para>
+        /// <para>The value specifying whether log files are deleted when the <see cref="MixedStorageKVStore{TKey, TValue}"/> is disposed or finalized</para>
         /// <para>Defaults to <c>true</c>.</para>
         /// </summary>
         public bool DeleteLogOnClose { get; set; } = true;

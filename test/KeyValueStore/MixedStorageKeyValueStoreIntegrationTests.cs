@@ -32,7 +32,7 @@ namespace Jering.KeyValueStore.Tests
         public async Task UpsertReadAsyncDelete_AreThreadSafe()
         {
             // Arrange
-            var dummyOptions = new MixedStorageKeyValueStoreOptions()
+            var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
                 LogFileNamePrefix = nameof(UpsertReadAsyncDelete_AreThreadSafe),
@@ -48,7 +48,7 @@ namespace Jering.KeyValueStore.Tests
                 DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
             };
             int numRecords = 10000;
-            using var testSubject = new MixedStorageKeyValueStore<int, DummyClass>(dummyOptions);
+            using var testSubject = new MixedStorageKVStore<int, DummyClass>(dummyOptions);
 
             // Act and assert
 
@@ -77,7 +77,7 @@ namespace Jering.KeyValueStore.Tests
         public async Task HandlesVariableLengthStructValues()
         {
             // Arrange
-            var dummyOptions = new MixedStorageKeyValueStoreOptions()
+            var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
                 LogFileNamePrefix = nameof(HandlesVariableLengthStructValues),
@@ -93,7 +93,7 @@ namespace Jering.KeyValueStore.Tests
                 DummyInt = 10,
                 DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
             };
-            using var testSubject = new MixedStorageKeyValueStore<int, DummyVariableLengthStruct>(dummyOptions);
+            using var testSubject = new MixedStorageKVStore<int, DummyVariableLengthStruct>(dummyOptions);
 
             // Act and assert
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyStructInstance));
@@ -104,7 +104,7 @@ namespace Jering.KeyValueStore.Tests
         public async Task HandlesFixedLengthStructValues()
         {
             // Arrange
-            var dummyOptions = new MixedStorageKeyValueStoreOptions()
+            var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
                 LogFileNamePrefix = nameof(HandlesFixedLengthStructValues),
@@ -120,7 +120,7 @@ namespace Jering.KeyValueStore.Tests
                 DummyInt = int.MaxValue,
                 DummyLong = long.MaxValue
             };
-            using var testSubject = new MixedStorageKeyValueStore<int, DummyFixedLengthStruct>(dummyOptions);
+            using var testSubject = new MixedStorageKVStore<int, DummyFixedLengthStruct>(dummyOptions);
 
             // Act and assert
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyStructInstance));
@@ -131,7 +131,7 @@ namespace Jering.KeyValueStore.Tests
         public async Task HandlesPrimitiveValues()
         {
             // Arrange
-            var dummyOptions = new MixedStorageKeyValueStoreOptions()
+            var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
                 LogFileNamePrefix = nameof(HandlesPrimitiveValues),
@@ -140,7 +140,7 @@ namespace Jering.KeyValueStore.Tests
             };
             const int dummyValue = 12345;
             const int numRecords = 10000;
-            using var testSubject = new MixedStorageKeyValueStore<int, int>(dummyOptions);
+            using var testSubject = new MixedStorageKVStore<int, int>(dummyOptions);
 
             // Act and assert
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyValue));
@@ -152,7 +152,7 @@ namespace Jering.KeyValueStore.Tests
         public void DeletesLogFilesOnDispose()
         {
             // Arrange
-            var dummyOptions = new MixedStorageKeyValueStoreOptions()
+            var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
                 LogFileNamePrefix = nameof(DeletesLogFilesOnDispose),
@@ -168,7 +168,7 @@ namespace Jering.KeyValueStore.Tests
                 DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
             };
             int numRecords = 50; // Just enough to make sure log files are created. Segment size isn't exceeded (only 1 of each log file).
-            var testSubject = new MixedStorageKeyValueStore<int, DummyClass>(dummyOptions);
+            var testSubject = new MixedStorageKVStore<int, DummyClass>(dummyOptions);
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance)); // Creates log
             Assert.Single(Directory.EnumerateFiles(_fixture.TempDirectory, $"{nameof(DeletesLogFilesOnDispose)}*")); // Log and object log
 
@@ -179,34 +179,10 @@ namespace Jering.KeyValueStore.Tests
             Assert.Empty(Directory.EnumerateFiles(_fixture.TempDirectory)); // Logs deleted
         }
 
-        [Fact]
-        public void TruncatesLogFilesOnDiskSpaceLimitsReached()
-        {
-            // Arrange
-            var dummyOptions = new MixedStorageKeyValueStoreOptions()
-            {
-                LogDirectory = _fixture.TempDirectory,
-                LogFileNamePrefix = nameof(TruncatesLogFilesOnDiskSpaceLimitsReached),
-                PageSizeBits = 9, // 512 bytes
-                MemorySizeBits = 10, // 1024 bytes
-                SegmentSizeBits = 12, // 4 KB
-                LogDiskSpaceBytes = 8192, // Maximum of three 4 KB segments (Faster truncates to 3 rather than 2 segments if this value is segment size * 2)
-            };
-            int numRecords = 1000; // Occupies more than max in-memory and disk space
-            using var testSubject = new MixedStorageKeyValueStore<int, string>(dummyOptions);
-
-            // Act
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, "dummyString")); // Creates log, truncates whenever log exceeds limit
-
-            // Assert
-            // Three 4 KB segment for each log
-            Assert.Equal(3, Directory.EnumerateFiles(_fixture.TempDirectory, $"{nameof(TruncatesLogFilesOnDiskSpaceLimitsReached)}*").Count());
-        }
-
         #region Helpers
         private static async Task ReadAndVerifyValuesAsync<TValue>(int startKey,
             int endKey,
-            MixedStorageKeyValueStore<int, TValue> mixedStorageKeyValueStore,
+            MixedStorageKVStore<int, TValue> mixedStorageKeyValueStore,
             Status expectedStatus,
             TValue? expectedResult)
         {
@@ -227,7 +203,7 @@ namespace Jering.KeyValueStore.Tests
             });
         }
 
-        private static async Task<(Status, TValue?)> ReadAsync<TValue>(int key, MixedStorageKeyValueStore<int, TValue> mixedStorageKeyValueStore)
+        private static async Task<(Status, TValue?)> ReadAsync<TValue>(int key, MixedStorageKVStore<int, TValue> mixedStorageKeyValueStore)
         {
             // Parallel.For doesn't await async actions, so we use Task.Yield to ensure operations run completely asynchronously and complete as
             // quickly as possible.
