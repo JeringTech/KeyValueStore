@@ -1,3 +1,17 @@
+# WIP
+
+A key-value store. Thin wrapper of [Microsoft.Faster](https://github.com/microsoft/FASTER) that abstracts away some of
+Faster's complexities, namely:
+
+- Sessions
+- Binary serialization,
+- Use of `SpanByte`
+- Log compaction
+- Disposal
+- Configuration for general use
+
+Initial key value store is functional. Package isn't published yet. This readme is a template at the moment.
+
 # Jering.KeyValueStore
 [![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/Jering.KeyValueStore-CI?branchName=master)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=1?branchName=master)
 [![codecov](https://codecov.io/gh/JeringTech/KeyValueStore/branch/master/graph/badge.svg)](https://codecov.io/gh/JeringTech/KeyValueStore)
@@ -20,8 +34,7 @@
 ## Overview
 
 ## Target Frameworks
-- .NET Standard 2.0
-- .NET Framework 4.6.1
+- .NET Standard 2.1
 
 ## Platforms
 Works on Windows, macOS, and Linux systems.
@@ -61,6 +74,7 @@ Contributions are welcome!
 
 ### Contributors
 - [JeremyTCD](https://github.com/JeremyTCD)
+- [badrishc](https://github.com/badrishc) ([Microsoft.Faster issue #403](https://github.com/microsoft/FASTER/issues/403))
 
 ## About
 Follow [@JeringTech](https://twitter.com/JeringTech) for updates and more.

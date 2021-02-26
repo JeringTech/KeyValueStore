@@ -1,7 +1,7 @@
 using FASTER.core;
 using MessagePack;
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,9 +14,8 @@ namespace Jering.KeyValueStore.Tests
     /// <list type="bullet">
     /// <item>Handle concurrent insert, update, read and delete operations</item>
     /// <item>Handle class, struct and built-in value-type values</item>
-    /// <item>Delete log files on dispose or finalize</item>
+    /// <item>Delete log files on dispose</item>
     /// <item>Truncate log files when disk limits reached</item>
-    /// <item>Periodically perform log compaction. Log compaction runs concurrently with other operations.</item>
     /// </list>
     /// </summary>
     public class MixedStorageKeyValueStoreIntegrationTests : IClassFixture<MixedStorageKeyValueStoreIntegrationTestsFixture>
@@ -30,13 +29,13 @@ namespace Jering.KeyValueStore.Tests
 
         // TODO Interleave operations
         [Fact]
-        public void UpsertReadAsyncDelete_AreThreadSafe()
+        public async Task UpsertReadAsyncDelete_AreThreadSafe()
         {
             // Arrange
             var dummyOptions = new MixedStorageKeyValueStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileName = nameof(UpsertReadAsyncDelete_AreThreadSafe),
+                LogFileNamePrefix = nameof(UpsertReadAsyncDelete_AreThreadSafe),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
@@ -57,50 +56,31 @@ namespace Jering.KeyValueStore.Tests
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance));
 
             // Read
-            ConcurrentQueue<(Status, DummyClass?)> results = new();
-            Parallel.For(0, numRecords, async key => results.Enqueue(await testSubject.ReadAsync(key).ConfigureAwait(false)));
-            foreach ((Status status, DummyClass? result) in results)
-            {
-                Assert.Equal(Status.OK, status);
-                Assert.Equal(dummyClassInstance, result); // See DummyClass.Equals
-            }
+            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
 
             // Update
             dummyClassInstance.DummyInt = 20;
             dummyClassInstance.DummyString = "anotherDummyString";
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance));
 
-            // Read again to verify updates
-            results.Clear();
-            Parallel.For(0, numRecords, async key => results.Enqueue(await testSubject.ReadAsync(key).ConfigureAwait(false)));
-            foreach ((Status status, DummyClass? result) in results)
-            {
-                Assert.Equal(Status.OK, status);
-                Assert.Equal(dummyClassInstance, result); // See DummyClass.Equals
-            }
+            // Verify updates
+            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
 
             // Delete
             Parallel.For(0, numRecords, key => testSubject.Delete(key));
 
-            //Read again to verify deletes
-            results.Clear();
-            Parallel.For(0, numRecords, async key => results.Enqueue(await testSubject.ReadAsync(key).ConfigureAwait(false)));
-            foreach ((Status status, DummyClass? result) in results)
-            {
-                Assert.Equal(Status.NOTFOUND, status);
-                Assert.Null(result);
-            }
+            // Verify deletes
+            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.NOTFOUND, null).ConfigureAwait(false);
         }
 
-        // MixedStorageKeyValueStore creates an ObjectLogDevice
         [Fact]
-        public void HandlesVariableLengthStructValues()
+        public async Task HandlesVariableLengthStructValues()
         {
             // Arrange
             var dummyOptions = new MixedStorageKeyValueStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileName = nameof(HandlesVariableLengthStructValues),
+                LogFileNamePrefix = nameof(HandlesVariableLengthStructValues),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
@@ -117,34 +97,17 @@ namespace Jering.KeyValueStore.Tests
 
             // Act and assert
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyStructInstance));
-            var exceptionQueue = new ConcurrentQueue<Exception>();
-            Parallel.For(0, numRecords, async key =>
-            {
-                try
-                {
-                    (Status status, DummyVariableLengthStruct result) = await testSubject.ReadAsync(key).ConfigureAwait(false);
-                    Assert.Equal(Status.OK, status);
-                    Assert.Equal(dummyStructInstance, result);
-                }
-                catch (Exception exception)
-                {
-                    exceptionQueue.Enqueue(exception);
-                }
-            });
-            if (!exceptionQueue.IsEmpty)
-            {
-                throw new AggregateException(exceptionQueue);
-            }
+            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyStructInstance).ConfigureAwait(false);
         }
 
         [Fact]
-        public void HandlesFixedLengthStructValues()
+        public async Task HandlesFixedLengthStructValues()
         {
             // Arrange
             var dummyOptions = new MixedStorageKeyValueStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileName = nameof(HandlesFixedLengthStructValues),
+                LogFileNamePrefix = nameof(HandlesFixedLengthStructValues),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
@@ -161,60 +124,27 @@ namespace Jering.KeyValueStore.Tests
 
             // Act and assert
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyStructInstance));
-            var exceptionQueue = new ConcurrentQueue<Exception>();
-            Parallel.For(0, numRecords, async key =>
-            {
-                try
-                {
-                    (Status status, DummyFixedLengthStruct result) = await testSubject.ReadAsync(key).ConfigureAwait(false);
-                    Assert.Equal(Status.OK, status);
-                    Assert.Equal(dummyStructInstance, result);
-                }
-                catch (Exception exception)
-                {
-                    exceptionQueue.Enqueue(exception);
-                }
-            });
-            if (!exceptionQueue.IsEmpty)
-            {
-                throw new AggregateException(exceptionQueue);
-            }
+            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyStructInstance).ConfigureAwait(false);
         }
 
         [Fact]
-        public void HandlesPrimitiveValues()
+        public async Task HandlesPrimitiveValues()
         {
             // Arrange
             var dummyOptions = new MixedStorageKeyValueStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileName = nameof(HandlesPrimitiveValues),
+                LogFileNamePrefix = nameof(HandlesPrimitiveValues),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
-            int numRecords = 10000;
+            const int dummyValue = 12345;
+            const int numRecords = 10000;
             using var testSubject = new MixedStorageKeyValueStore<int, int>(dummyOptions);
 
             // Act and assert
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, key));
-            var exceptionQueue = new ConcurrentQueue<Exception>();
-            Parallel.For(0, numRecords, async key =>
-            {
-                try
-                {
-                    (Status status, int result) = await testSubject.ReadAsync(key).ConfigureAwait(false);
-                    Assert.Equal(Status.OK, status);
-                    Assert.Equal(key, result);
-                }
-                catch (Exception exception)
-                {
-                    exceptionQueue.Enqueue(exception);
-                }
-            });
-            if (!exceptionQueue.IsEmpty)
-            {
-                throw new AggregateException(exceptionQueue);
-            }
+            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyValue));
+            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyValue).ConfigureAwait(false);
         }
 
         // TODO Finalizing should delete log files too, is there a way to test this?
@@ -225,7 +155,7 @@ namespace Jering.KeyValueStore.Tests
             var dummyOptions = new MixedStorageKeyValueStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileName = nameof(DeletesLogFilesOnDispose),
+                LogFileNamePrefix = nameof(DeletesLogFilesOnDispose),
                 PageSizeBits = 9, // Minimum
                 MemorySizeBits = 10 // Minimum
             };
@@ -238,7 +168,7 @@ namespace Jering.KeyValueStore.Tests
                 DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
             };
             int numRecords = 50; // Just enough to make sure log files are created. Segment size isn't exceeded (only 1 of each log file).
-            using var testSubject = new MixedStorageKeyValueStore<int, DummyClass>(dummyOptions);
+            var testSubject = new MixedStorageKeyValueStore<int, DummyClass>(dummyOptions);
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance)); // Creates log
             Assert.Single(Directory.EnumerateFiles(_fixture.TempDirectory, $"{nameof(DeletesLogFilesOnDispose)}*")); // Log and object log
 
@@ -256,7 +186,7 @@ namespace Jering.KeyValueStore.Tests
             var dummyOptions = new MixedStorageKeyValueStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileName = nameof(TruncatesLogFilesOnDiskSpaceLimitsReached),
+                LogFileNamePrefix = nameof(TruncatesLogFilesOnDiskSpaceLimitsReached),
                 PageSizeBits = 9, // 512 bytes
                 MemorySizeBits = 10, // 1024 bytes
                 SegmentSizeBits = 12, // 4 KB
@@ -273,11 +203,41 @@ namespace Jering.KeyValueStore.Tests
             Assert.Equal(3, Directory.EnumerateFiles(_fixture.TempDirectory, $"{nameof(TruncatesLogFilesOnDiskSpaceLimitsReached)}*").Count());
         }
 
-        //[Fact]
-        //public void PerformsLogCompactionPeriodically()
-        //{
-        //}
+        #region Helpers
+        private static async Task ReadAndVerifyValuesAsync<TValue>(int startKey,
+            int endKey,
+            MixedStorageKeyValueStore<int, TValue> mixedStorageKeyValueStore,
+            Status expectedStatus,
+            TValue? expectedResult)
+        {
+            // Read
+            List<Task<(Status, TValue?)>> readTasks = new();
+            for (int key = startKey; key < endKey; key++)
+            {
+                readTasks.Add(ReadAsync(key, mixedStorageKeyValueStore));
+            }
+            await Task.WhenAll(readTasks).ConfigureAwait(false);
 
+            // Verify
+            Parallel.For(0, endKey - startKey, index =>
+            {
+                (Status status, TValue? result) = readTasks[index].Result;
+                Assert.Equal(expectedStatus, status);
+                Assert.Equal(expectedResult, result); // See DummyClass.Equals
+            });
+        }
+
+        private static async Task<(Status, TValue?)> ReadAsync<TValue>(int key, MixedStorageKeyValueStore<int, TValue> mixedStorageKeyValueStore)
+        {
+            // Parallel.For doesn't await async actions, so we use Task.Yield to ensure operations run completely asynchronously and complete as
+            // quickly as possible.
+            await Task.Yield();
+
+            return await mixedStorageKeyValueStore.ReadAsync(key).ConfigureAwait(false);
+        }
+        #endregion
+
+        #region Types
         [MessagePackObject]
         public struct DummyFixedLengthStruct
         {
@@ -383,6 +343,7 @@ namespace Jering.KeyValueStore.Tests
                 return HashCode.Combine(DummyString, DummyStringArray, DummyInt, DummyIntArray);
             }
         }
+        #endregion
     }
 
     public class MixedStorageKeyValueStoreIntegrationTestsFixture : IDisposable

@@ -6,8 +6,7 @@ namespace Jering.KeyValueStore.Performance
     {
         static void Main(string[] args)
         {
-            //BenchmarkRunner.Run<LowMemoryUsageBenchmarks>();
-            BenchmarkRunner.Run<NormalMemoryUsageBenchmarks>();
+            BenchmarkRunner.Run<LowMemoryUsageBenchmarks>();
         }
     }
 }

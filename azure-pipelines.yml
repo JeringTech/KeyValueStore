@@ -11,7 +11,6 @@ resources:
 jobs:
 - template: templates/nuget/main.yml@templates
   parameters:
-  # TODO
     codecovKey: "67424e1a-1c96-4db4-8874-bfa35e2d302c"
     cacheYarnPackages: true
 - template: templates/docs/main.yml@templates

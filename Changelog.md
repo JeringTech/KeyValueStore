@@ -5,5 +5,5 @@ for an overview of semantic versioning.
 
 ## [Unreleased](https://github.com/JeringTech/KeyValueStore/compare/0.1.0...HEAD)
 
-## [0.1.0](https://github.com/JeringTech/KeyValueStore/compare/0.1.0...0.1.0) - Feb 22, 2021
+## [0.1.0](https://github.com/JeringTech/KeyValueStore/compare/0.1.0...0.1.0) - Feb 26, 2021
 Initial release.

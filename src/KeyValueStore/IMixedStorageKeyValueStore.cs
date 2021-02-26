@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     /// <summary>
-    /// An abstraction for a key-value store that stores data both in-memory and on-disk.
+    /// An abstraction for a key-value store that spans memory and disk.
     /// </summary>
     /// <typeparam name="TKey">The type of the key-value store's key.</typeparam>
     /// <typeparam name="TValue">The type of the key-value store's values.</typeparam>
