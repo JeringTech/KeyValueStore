@@ -41,6 +41,8 @@ namespace Jering.KeyValueStore.Performance
         [IterationSetup(Target = nameof(Upsert_ConcurrentInserts_WithoutCompression))]
         public void Upsert_ConcurrentInserts_WithoutCompression_IterationSetup()
         {
+            //_mixedStorageKVStore = new ObjLogMixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
+            //_mixedStorageKVStore = new MemoryMixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
             _mixedStorageKVStore = new MixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
         }
 
@@ -66,6 +68,8 @@ namespace Jering.KeyValueStore.Performance
                 MemorySizeBits = 13, // 2 pages
                 MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
             };
+            //_mixedStorageKVStore = new ObjLogMixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
+            //_mixedStorageKVStore = new MemoryMixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
             _mixedStorageKVStore = new MixedStorageKVStore<int, string>(_mixedStorageKVStoreOptions);
             Parallel.For(0, READ_NUM_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyValue));
         }

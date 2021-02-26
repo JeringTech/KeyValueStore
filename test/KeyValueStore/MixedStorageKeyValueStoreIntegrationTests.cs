@@ -13,7 +13,7 @@ namespace Jering.KeyValueStore.Tests
     /// Verifies behaviour of <see cref="MixedStorageKeyValueStore"/> and its underlying <see cref="FasterKV{TKey, TValue}"/> instance. They:
     /// <list type="bullet">
     /// <item>Handle concurrent insert, update, read and delete operations</item>
-    /// <item>Handle class, struct and built-in value-type values</item>
+    /// <item>Handle reference-type and value-type keys and values</item>
     /// <item>Delete log files on dispose</item>
     /// <item>Truncate log files when disk limits reached</item>
     /// </list>
@@ -48,6 +48,8 @@ namespace Jering.KeyValueStore.Tests
                 DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
             };
             int numRecords = 10000;
+            //using var testSubject = new ObjLogMixedStorageKVStore<int, DummyClass>(dummyOptions);
+            //using var testSubject = new MemoryMixedStorageKVStore<int, DummyClass>(dummyOptions);
             using var testSubject = new MixedStorageKVStore<int, DummyClass>(dummyOptions);
 
             // Act and assert
@@ -56,7 +58,7 @@ namespace Jering.KeyValueStore.Tests
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance));
 
             // Read
-            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
+            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
 
             // Update
             dummyClassInstance.DummyInt = 20;
@@ -64,77 +66,167 @@ namespace Jering.KeyValueStore.Tests
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance));
 
             // Verify updates
-            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
+            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
 
             // Delete
             Parallel.For(0, numRecords, key => testSubject.Delete(key));
 
             // Verify deletes
-            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.NOTFOUND, null).ConfigureAwait(false);
+            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.NOTFOUND, null).ConfigureAwait(false);
         }
 
         [Fact]
-        public async Task HandlesVariableLengthStructValues()
+        public async Task HandlesObjectKeysAndValues()
         {
             // Arrange
             var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileNamePrefix = nameof(HandlesVariableLengthStructValues),
+                LogFileNamePrefix = nameof(HandlesObjectKeysAndValues),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
             int numRecords = 10000;
+            using var testSubject = new MixedStorageKVStore<string, string>(dummyOptions);
+
+            // Act and assert
+
+            // Insert
+            Parallel.For(0, numRecords, key =>
+            {
+                string keyAsString = key.ToString();
+                testSubject.Upsert(keyAsString, keyAsString);
+            });
+
+            // Read
+            List<Task<(Status, string?)>> readTasks = new();
+            for (int key = 0; key < numRecords; key++)
+            {
+                readTasks.Add(ReadAsync(key.ToString(), testSubject));
+            }
+            await Task.WhenAll(readTasks).ConfigureAwait(false);
+
+            // Verify
+            Parallel.For(0, numRecords, key =>
+            {
+                (Status status, string? result) = readTasks[key].Result;
+                Assert.Equal(Status.OK, status);
+                Assert.Equal(key.ToString(), result); // See DummyClass.Equals
+            });
+        }
+
+        [Fact]
+        public async Task HandlesVariableLengthStructKeysAndValues()
+        {
+            // Arrange
+            var dummyOptions = new MixedStorageKVStoreOptions()
+            {
+                LogDirectory = _fixture.TempDirectory,
+                LogFileNamePrefix = nameof(HandlesVariableLengthStructKeysAndValues),
+                PageSizeBits = 12,
+                MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
+            };
             var dummyStructInstance = new DummyVariableLengthStruct()
             {
                 // Populate with dummy values
                 DummyString = "dummyString",
                 DummyStringArray = new[] { "dummyString1", "dummyString2", "dummyString3", "dummyString4", "dummyString5" },
-                DummyInt = 10,
                 DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
             };
-            using var testSubject = new MixedStorageKVStore<int, DummyVariableLengthStruct>(dummyOptions);
+            int numRecords = 10000;
+            using var testSubject = new MixedStorageKVStore<DummyVariableLengthStruct, DummyVariableLengthStruct>(dummyOptions);
 
             // Act and assert
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyStructInstance));
-            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyStructInstance).ConfigureAwait(false);
+
+            // Insert
+            Parallel.For(0, numRecords, key =>
+            {
+                DummyVariableLengthStruct localDummyStructInstance = dummyStructInstance;
+                localDummyStructInstance.DummyInt = key;
+                testSubject.Upsert(localDummyStructInstance, localDummyStructInstance);
+            });
+
+            // Read
+            List<Task<(Status, DummyVariableLengthStruct)>> readTasks = new();
+            for (int key = 0; key < numRecords; key++)
+            {
+                DummyVariableLengthStruct localDummyStructInstance = dummyStructInstance;
+                localDummyStructInstance.DummyInt = key;
+                readTasks.Add(ReadAsync(localDummyStructInstance, testSubject));
+            }
+            await Task.WhenAll(readTasks).ConfigureAwait(false);
+
+            // Verify
+            for (int key = 0; key < numRecords; key++)
+            {
+                (Status status, DummyVariableLengthStruct result) = readTasks[key].Result;
+                Assert.Equal(Status.OK, status);
+                DummyVariableLengthStruct localDummyStructInstance = dummyStructInstance;
+                localDummyStructInstance.DummyInt = key;
+                Assert.Equal(localDummyStructInstance, result);
+            };
         }
 
         [Fact]
-        public async Task HandlesFixedLengthStructValues()
+        public async Task HandlesFixedLengthStructKeysAndValues()
         {
             // Arrange
             var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileNamePrefix = nameof(HandlesFixedLengthStructValues),
+                LogFileNamePrefix = nameof(HandlesVariableLengthStructKeysAndValues),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
-            int numRecords = 10000;
             var dummyStructInstance = new DummyFixedLengthStruct()
             {
                 // Populate with dummy values
                 DummyByte = byte.MaxValue,
                 DummyShort = short.MaxValue,
-                DummyInt = int.MaxValue,
                 DummyLong = long.MaxValue
             };
-            using var testSubject = new MixedStorageKVStore<int, DummyFixedLengthStruct>(dummyOptions);
+            int numRecords = 10000;
+            using var testSubject = new MixedStorageKVStore<DummyFixedLengthStruct, DummyFixedLengthStruct>(dummyOptions);
 
             // Act and assert
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyStructInstance));
-            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyStructInstance).ConfigureAwait(false);
+
+            // Insert
+            Parallel.For(0, numRecords, key =>
+            {
+                DummyFixedLengthStruct localDummyStructInstance = dummyStructInstance;
+                localDummyStructInstance.DummyInt = key;
+                testSubject.Upsert(localDummyStructInstance, localDummyStructInstance);
+            });
+
+            // Read
+            List<Task<(Status, DummyFixedLengthStruct)>> readTasks = new();
+            for (int key = 0; key < numRecords; key++)
+            {
+                DummyFixedLengthStruct localDummyStructInstance = dummyStructInstance;
+                localDummyStructInstance.DummyInt = key;
+                readTasks.Add(ReadAsync(localDummyStructInstance, testSubject));
+            }
+            await Task.WhenAll(readTasks).ConfigureAwait(false);
+
+            // Verify
+            for (int key = 0; key < numRecords; key++)
+            {
+                (Status status, DummyFixedLengthStruct result) = readTasks[key].Result;
+                Assert.Equal(Status.OK, status);
+                DummyFixedLengthStruct localDummyStructInstance = dummyStructInstance;
+                localDummyStructInstance.DummyInt = key;
+                Assert.Equal(localDummyStructInstance, result);
+            };
         }
 
         [Fact]
-        public async Task HandlesPrimitiveValues()
+        public async Task HandlesPrimitiveKeysAndValues()
         {
             // Arrange
             var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = _fixture.TempDirectory,
-                LogFileNamePrefix = nameof(HandlesPrimitiveValues),
+                LogFileNamePrefix = nameof(HandlesPrimitiveKeysAndValues),
                 PageSizeBits = 12,
                 MemorySizeBits = 13 // Limit to 8KB so we're testing both in-memory and disk-based operations
             };
@@ -144,7 +236,7 @@ namespace Jering.KeyValueStore.Tests
 
             // Act and assert
             Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyValue));
-            await ReadAndVerifyValuesAsync(0, numRecords, testSubject, Status.OK, dummyValue).ConfigureAwait(false);
+            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.OK, dummyValue).ConfigureAwait(false);
         }
 
         // TODO Finalizing should delete log files too, is there a way to test this?
@@ -180,22 +272,21 @@ namespace Jering.KeyValueStore.Tests
         }
 
         #region Helpers
-        private static async Task ReadAndVerifyValuesAsync<TValue>(int startKey,
-            int endKey,
-            MixedStorageKVStore<int, TValue> mixedStorageKeyValueStore,
+        private static async Task ReadAndVerifyValuesAsync<TValue>(int numRecords,
+            IMixedStorageKVStore<int, TValue> mixedStorageKeyValueStore,
             Status expectedStatus,
             TValue? expectedResult)
         {
             // Read
             List<Task<(Status, TValue?)>> readTasks = new();
-            for (int key = startKey; key < endKey; key++)
+            for (int key = 0; key < numRecords; key++)
             {
                 readTasks.Add(ReadAsync(key, mixedStorageKeyValueStore));
             }
             await Task.WhenAll(readTasks).ConfigureAwait(false);
 
             // Verify
-            Parallel.For(0, endKey - startKey, index =>
+            Parallel.For(0, numRecords, index =>
             {
                 (Status status, TValue? result) = readTasks[index].Result;
                 Assert.Equal(expectedStatus, status);
@@ -203,7 +294,7 @@ namespace Jering.KeyValueStore.Tests
             });
         }
 
-        private static async Task<(Status, TValue?)> ReadAsync<TValue>(int key, MixedStorageKVStore<int, TValue> mixedStorageKeyValueStore)
+        private static async Task<(Status, TValue?)> ReadAsync<TKey, TValue>(TKey key, IMixedStorageKVStore<TKey, TValue> mixedStorageKeyValueStore)
         {
             // Parallel.For doesn't await async actions, so we use Task.Yield to ensure operations run completely asynchronously and complete as
             // quickly as possible.

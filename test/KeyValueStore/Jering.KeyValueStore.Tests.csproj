@@ -4,6 +4,10 @@
         <TargetFramework>net5.0</TargetFramework>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <!-- So we can access internal members in Jering.KeyValueStore -->
+        <AssemblyOriginatorKeyFile>../../keypair.snk</AssemblyOriginatorKeyFile>
+        <SignAssembly>true</SignAssembly>
+        <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>
     </PropertyGroup>
 
     <ItemGroup>

@@ -7,7 +7,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Jering.KeyValueStore.Performance
+namespace Jering.KeyValueStore
 {
     /// <summary>
     /// An implementation of <see cref="IMixedStorageKVStore{TKey, TValue}"/> that uses an object log.

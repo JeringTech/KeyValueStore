@@ -17,20 +17,21 @@ namespace Jering.KeyValueStore
         private static readonly MixedStorageKVStoreOptions _defaultMixedStorageKVStoreOptions = new();
 
         // Faster store
-        private readonly FasterKV<TKey, SpanByte> _fasterKVStore;
-        private readonly SpanByteFunctions<TKey> _spanByteFunctions = new();
-        private readonly FasterKV<TKey, SpanByte>.ClientSessionBuilder<SpanByte, SpanByteAndMemory, Empty> _clientSessionBuilder;
+        private readonly FasterKV<SpanByte, SpanByte> _fasterKVStore;
+        private readonly SpanByteFunctions<Empty> _spanByteFunctions = new();
+        private readonly FasterKV<SpanByte, SpanByte>.ClientSessionBuilder<SpanByte, SpanByteAndMemory, Empty> _clientSessionBuilder;
 
         // Sessions
-        private readonly ThreadLocal<ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>>> _threadLocalSession;
-        private readonly ConcurrentQueue<ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>>> _sessionPool = new();
+        private readonly ThreadLocal<ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>> _threadLocalSession;
+        private readonly ConcurrentQueue<ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>> _sessionPool = new();
 
         // Log
-        private readonly LogAccessor<TKey, SpanByte> _logAccessor;
+        private readonly LogAccessor<SpanByte, SpanByte> _logAccessor;
 
         // Serialization
         private readonly MessagePackSerializerOptions _messagePackSerializerOptions;
         private readonly ThreadLocal<ArrayBufferWriter<byte>> _threadLocalArrayBufferWriter;
+        private readonly ConcurrentQueue<ArrayBufferWriter<byte>> _arrayBufferWriterPool = new();
 
         // Disposal
         private bool _disposed;
@@ -58,7 +59,7 @@ namespace Jering.KeyValueStore
         /// <summary>
         /// Creates a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
         /// </summary>
-        public MixedStorageKVStore(FasterKV<TKey, SpanByte> fasterKVStore,
+        public MixedStorageKVStore(FasterKV<SpanByte, SpanByte> fasterKVStore,
             MessagePackSerializerOptions? messagePackSerializerOptions = null)
         {
             _fasterKVStore = fasterKVStore;
@@ -71,6 +72,7 @@ namespace Jering.KeyValueStore
             _threadLocalSession = new(CreateSession, true);
         }
 
+        // TODO fast paths for fixed size keys and values
         /// <inheritdoc />
         public void Upsert(TKey key, TValue obj)
         {
@@ -79,20 +81,24 @@ namespace Jering.KeyValueStore
                 throw new ObjectDisposedException(nameof(MixedStorageKVStore<TKey, TValue>));
             }
 
+            // Session
+            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = _threadLocalSession.Value;
+
             // Serialize
             ArrayBufferWriter<byte> arrayBufferWriter = _threadLocalArrayBufferWriter.Value;
+            MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
+            int keyLength = arrayBufferWriter.WrittenCount;
             MessagePackSerializer.Serialize(arrayBufferWriter, obj, _messagePackSerializerOptions);
             ReadOnlySpan<byte> span = arrayBufferWriter.WrittenSpan;
 
             // Upsert
-            ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = _threadLocalSession.Value;
-
             unsafe
             {
                 fixed (byte* pointer = span)
                 {
-                    var spanByte = SpanByte.FromFixedSpan(span);
-                    session.Upsert(key, spanByte);
+                    var keySpanByte = SpanByte.FromFixedSpan(span.Slice(0, keyLength));
+                    var objSpanByte = SpanByte.FromFixedSpan(span[keyLength..]);
+                    session.Upsert(ref keySpanByte, ref objSpanByte);
                 }
             }
 
@@ -108,7 +114,29 @@ namespace Jering.KeyValueStore
                 throw new ObjectDisposedException(nameof(MixedStorageKVStore<TKey, TValue>));
             }
 
-            return _threadLocalSession.Value.Delete(key);
+            // Session
+            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = _threadLocalSession.Value;
+
+            // Serialize
+            ArrayBufferWriter<byte> arrayBufferWriter = _threadLocalArrayBufferWriter.Value;
+            MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
+            ReadOnlySpan<byte> span = arrayBufferWriter.WrittenSpan;
+
+            // Delete
+            Status result;
+            unsafe
+            {
+                fixed (byte* pointer = span)
+                {
+                    var keySpanByte = SpanByte.FromFixedSpan(span);
+                    result = session.Delete(keySpanByte);
+                }
+            }
+
+            // Clear memory pool
+            arrayBufferWriter.Clear();
+
+            return result;
         }
 
         /// <inheritdoc />
@@ -119,20 +147,42 @@ namespace Jering.KeyValueStore
                 throw new ObjectDisposedException(nameof(MixedStorageKVStore<TKey, TValue>));
             }
 
-            ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session = GetPooledSession();
+            // Session
+            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = GetPooledSession();
 
-            (Status status, SpanByteAndMemory spanByteAndMemory) = (await session.ReadAsync(key).ConfigureAwait(false)).Complete();
+            // Serialize
+            ArrayBufferWriter<byte> arrayBufferWriter = GetPooledArrayBufferWriter();  // If we use a ThreadLocal ArrayBufferWriter, we might call Clear on the wrong instance if the continuation is on a different thread
+            MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
+            ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
 
+            // Read
+            Status status;
+            SpanByteAndMemory spanByteAndMemory;
+            using (MemoryHandle memoryHandle = memory.Pin())
+            {
+                SpanByte keySpanByte;
+                unsafe
+                {
+                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, memory.Length);
+                }
+
+                (status, spanByteAndMemory) = (await session.ReadAsync(keySpanByte).ConfigureAwait(false)).Complete();
+            }
+
+            // Clean up
+            arrayBufferWriter.Clear();
+            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
             _sessionPool.Enqueue(session);
 
+            // Deserialize
             using IMemoryOwner<byte> memoryOwner = spanByteAndMemory.Memory;
 
             return (status, status != Status.OK ? default : MessagePackSerializer.Deserialize<TValue>(memoryOwner.Memory, _messagePackSerializerOptions));
         }
 
-        private ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> GetPooledSession()
+        private ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> GetPooledSession()
         {
-            if (_sessionPool.TryDequeue(out ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>>? result))
+            if (_sessionPool.TryDequeue(out ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>? result))
             {
                 return result;
             }
@@ -140,11 +190,22 @@ namespace Jering.KeyValueStore
             return CreateSession();
         }
 
-        private ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> CreateSession()
+        private ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> CreateSession()
         {
-            return _clientSessionBuilder.NewSession<SpanByteFunctions<TKey>>();
+            return _clientSessionBuilder.NewSession<SpanByteFunctions<Empty>>();
         }
 
+        private ArrayBufferWriter<byte> GetPooledArrayBufferWriter()
+        {
+            if (_arrayBufferWriterPool.TryDequeue(out ArrayBufferWriter<byte>? result))
+            {
+                return result;
+            }
+
+            return new();
+        }
+
+        // Required for ThreadLocal<ArrayBufferWriter<byte>>
         private static ArrayBufferWriter<byte> CreateArrayBufferWriter()
         {
             return new();
@@ -187,12 +248,12 @@ namespace Jering.KeyValueStore
             {
                 if (disposing)
                 {
-                    foreach (ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session in _sessionPool)
+                    foreach (ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session in _sessionPool)
                     {
                         session.Dispose();
                     }
 
-                    foreach (ClientSession<TKey, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<TKey>> session in _threadLocalSession.Values)
+                    foreach (ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session in _threadLocalSession.Values)
                     {
                         session.Dispose();
                     }

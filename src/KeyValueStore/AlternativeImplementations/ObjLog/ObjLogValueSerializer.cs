@@ -1,7 +1,7 @@
 ﻿using FASTER.core;
 using MessagePack;
 
-namespace Jering.KeyValueStore.Performance
+namespace Jering.KeyValueStore
 {
     public class ObjLogValueSerializer<TValue> : BinaryObjectSerializer<TValue>
     {
