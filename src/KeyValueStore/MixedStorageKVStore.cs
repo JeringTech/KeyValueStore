@@ -1,5 +1,6 @@
 ﻿using FASTER.core;
 using MessagePack;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -9,6 +10,9 @@ using System.Threading.Tasks;
 
 namespace Jering.KeyValueStore
 {
+    // TODO
+    // - Fast paths for fixed size keys and values. We need an equivalent of FASTER.core.Utility.IsBlittableType to check 
+    //   if a key/value type is blittable. If it is, we can either use a fast path or create a FasterKV instance with blittable key/value type.
     /// <summary>
     /// The default implementation of <see cref="IMixedStorageKVStore{TKey, TValue}"/>.
     /// </summary>
@@ -27,11 +31,21 @@ namespace Jering.KeyValueStore
 
         // Log
         private readonly LogAccessor<SpanByte, SpanByte> _logAccessor;
+        private readonly CancellationTokenSource? _logCompactionCancellationTokenSource;
+        private readonly int _timeBetweenLogCompactionsMS;
+        private long _logCompactionThresholdBytes = 0;
+        private byte _numConsecutiveLogCompactions = 0;
+        private const byte NUM_CONSECUTIVE_COMPACTIONS_BEFORE_THRESHOLD_INCREASE = 5;
 
         // Serialization
         private readonly MessagePackSerializerOptions _messagePackSerializerOptions;
         private readonly ThreadLocal<ArrayBufferWriter<byte>> _threadLocalArrayBufferWriter;
         private readonly ConcurrentQueue<ArrayBufferWriter<byte>> _arrayBufferWriterPool = new();
+
+        // Logging
+        private readonly ILogger<MixedStorageKVStore<TKey, TValue>>? _logger;
+        private readonly bool _logTrace;
+        private readonly bool _logWarning;
 
         // Disposal
         private bool _disposed;
@@ -40,39 +54,49 @@ namespace Jering.KeyValueStore
         /// <summary>
         /// Creates a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
         /// </summary>
-        public MixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKeyValueStoreOptions = null)
+        public MixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null,
+            ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null,
+            FasterKV<SpanByte, SpanByte>? fasterKVStore = null)
         {
-            mixedStorageKeyValueStoreOptions ??= _defaultMixedStorageKVStoreOptions;
-            LogSettings logSettings = CreateSettings(mixedStorageKeyValueStoreOptions);
+            mixedStorageKVStoreOptions ??= _defaultMixedStorageKVStoreOptions;
 
-            _fasterKVStore = new(mixedStorageKeyValueStoreOptions.IndexNumBuckets, logSettings);
+            // Store
+            if (fasterKVStore == null)
+            {
+                LogSettings logSettings = CreateLogSettings(mixedStorageKVStoreOptions);
+                _logDevice = logSettings.LogDevice; // _fasterKVStore.dispose doesn't dispose the underlying log device, so hold a reference for immediate manual disposal
+                _fasterKVStore = new(mixedStorageKVStoreOptions.IndexNumBuckets, logSettings);
+            }
+            else
+            {
+                _fasterKVStore = fasterKVStore;
+            }
+
+            // Session
             _clientSessionBuilder = _fasterKVStore.For(_spanByteFunctions);
-            _logDevice = logSettings.LogDevice; // _fasterKVStore.dispose doesn't dispose the underlying log device, so hold a reference for manual disposal
-
-            _logAccessor = _fasterKVStore.Log;
-            _messagePackSerializerOptions = mixedStorageKeyValueStoreOptions.MessagePackSerializerOptions;
-            _threadLocalArrayBufferWriter = new(CreateArrayBufferWriter, true);
             _threadLocalSession = new(CreateSession, true);
 
-        }
-
-        /// <summary>
-        /// Creates a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
-        /// </summary>
-        public MixedStorageKVStore(FasterKV<SpanByte, SpanByte> fasterKVStore,
-            MessagePackSerializerOptions? messagePackSerializerOptions = null)
-        {
-            _fasterKVStore = fasterKVStore;
-            _clientSessionBuilder = _fasterKVStore.For(_spanByteFunctions);
-            // TODO can we get a reference to the log device?
-
+            // Log
             _logAccessor = _fasterKVStore.Log;
-            _messagePackSerializerOptions = messagePackSerializerOptions ?? _defaultMixedStorageKVStoreOptions.MessagePackSerializerOptions;
-            _threadLocalArrayBufferWriter = new(CreateArrayBufferWriter, true);
-            _threadLocalSession = new(CreateSession, true);
+            _timeBetweenLogCompactionsMS = mixedStorageKVStoreOptions.TimeBetweenLogCompactionsMS;
+            if (_timeBetweenLogCompactionsMS > -1)
+            {
+                _logCompactionThresholdBytes = mixedStorageKVStoreOptions.InitialLogCompactionThresholdBytes;
+                _logCompactionThresholdBytes = _logCompactionThresholdBytes <= 0 ? (long)Math.Pow(2, mixedStorageKVStoreOptions.MemorySizeBits) * 2 : _logCompactionThresholdBytes;
+                _logCompactionCancellationTokenSource = new CancellationTokenSource();
+                Task.Run(LogCompactionLoop);
+            }
+
+            // Serialization
+            _messagePackSerializerOptions = mixedStorageKVStoreOptions.MessagePackSerializerOptions;
+            _threadLocalArrayBufferWriter = new(() => new(), true);
+
+            // Logging
+            _logger = logger;
+            _logTrace = _logger?.IsEnabled(LogLevel.Trace) ?? false;
+            _logWarning = _logger?.IsEnabled(LogLevel.Warning) ?? false;
         }
 
-        // TODO fast paths for fixed size keys and values
         /// <inheritdoc />
         public void Upsert(TKey key, TValue obj)
         {
@@ -96,7 +120,7 @@ namespace Jering.KeyValueStore
             {
                 fixed (byte* pointer = span)
                 {
-                    var keySpanByte = SpanByte.FromFixedSpan(span.Slice(0, keyLength));
+                    var keySpanByte = SpanByte.FromFixedSpan(span[0..keyLength]);
                     var objSpanByte = SpanByte.FromFixedSpan(span[keyLength..]);
                     session.Upsert(ref keySpanByte, ref objSpanByte);
                 }
@@ -180,6 +204,72 @@ namespace Jering.KeyValueStore
             return (status, status != Status.OK ? default : MessagePackSerializer.Deserialize<TValue>(memoryOwner.Memory, _messagePackSerializerOptions));
         }
 
+        private async Task LogCompactionLoop()
+        {
+#pragma warning disable CS8602 // If compaction loop is running, cts is not null (see constructor)
+            CancellationToken cancellationToken = _logCompactionCancellationTokenSource.Token;
+#pragma warning restore CS8602
+
+            while (!_disposed && !_logCompactionCancellationTokenSource.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(_timeBetweenLogCompactionsMS, cancellationToken);
+
+                    // (oldest entries here) BeginAddress <= HeadAddress (where the in-memory region begins) <= SafeReadOnlyAddress (entries between here and tail updated in-place) < TailAddress (entries added here)
+                    long safeReadOnlyRegionByteSize = _logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress;
+                    if (safeReadOnlyRegionByteSize < _logCompactionThresholdBytes)
+                    {
+                        if (_logTrace)
+                        {
+                            _logger.LogTrace(string.Format(Strings.LogTrace_SkippingLogCompaction, safeReadOnlyRegionByteSize, _logCompactionThresholdBytes));
+                        }
+                        _numConsecutiveLogCompactions = 0;
+                        continue;
+                    }
+
+                    // Compact
+                    long compactUntilAddress = (long)(_logAccessor.BeginAddress + 0.2 * (_logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress));
+                    _threadLocalSession.Value.Compact(compactUntilAddress, true);
+                    _numConsecutiveLogCompactions++;
+
+                    if (_logTrace)
+                    {
+                        _logger.LogTrace(string.Format(Strings.LogTrace_LogCompacted, 
+                            safeReadOnlyRegionByteSize, 
+                            _logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress,
+                            _numConsecutiveLogCompactions));
+                    }
+
+                    // Update threshold
+                    // Note that we can't simply check whether safeReadOnlyRegionByteSize has changed - when the log is compact, safeReadOnlyRegionByteSize may change (increase or decrease)
+                    // by small amounts every compaction. This is because records are shifted from head to tail, i.e. the set of records in the safe readonly region changes.
+                    if (_numConsecutiveLogCompactions >= NUM_CONSECUTIVE_COMPACTIONS_BEFORE_THRESHOLD_INCREASE)
+                    {
+                        _logCompactionThresholdBytes *= 2; // Max long is ~9200 petabytes, overflow is not an issue for now
+                        if (_logTrace)
+                        {
+                            _logger.LogTrace(string.Format(Strings.LogTrace_LogCompactionThresholdIncreased, _logCompactionThresholdBytes / 2, _logCompactionThresholdBytes));
+                        }
+                        _numConsecutiveLogCompactions = 0;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception exception)
+                {
+                    // Compaction failed or we disposed of the instance. If we disposed of the instance, the next while loop boolean expression evaluation returns false.
+                    // If compaction failed, we try again after a delay.
+                    if (_logWarning)
+                    {
+                        _logger.LogWarning(string.Format(Strings.LogWarning_Exception, exception.Message));
+                    }
+                }
+            }
+        }
+
         private ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> GetPooledSession()
         {
             if (_sessionPool.TryDequeue(out ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>? result))
@@ -205,13 +295,7 @@ namespace Jering.KeyValueStore
             return new();
         }
 
-        // Required for ThreadLocal<ArrayBufferWriter<byte>>
-        private static ArrayBufferWriter<byte> CreateArrayBufferWriter()
-        {
-            return new();
-        }
-
-        private LogSettings CreateSettings(MixedStorageKVStoreOptions options)
+        private LogSettings CreateLogSettings(MixedStorageKVStoreOptions options)
         {
             // Log settings
             string logDirectory = string.IsNullOrWhiteSpace(options.LogDirectory) ? Path.Combine(Path.GetTempPath(), "FasterLogs") : options.LogDirectory;
@@ -248,6 +332,9 @@ namespace Jering.KeyValueStore
             {
                 if (disposing)
                 {
+                    _logCompactionCancellationTokenSource?.Cancel();
+                    _logCompactionCancellationTokenSource?.Dispose(); // Should not be necessary to call Dispose if we call Cancel, but no harm
+
                     foreach (ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session in _sessionPool)
                     {
                         session.Dispose();
@@ -255,13 +342,13 @@ namespace Jering.KeyValueStore
 
                     foreach (ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session in _threadLocalSession.Values)
                     {
-                        session.Dispose();
+                        session.Dispose(); // Dispose synchronously completes all pending operations, so we should not get exceptions if we're in the middle of log compaction
                     }
 
-                    _threadLocalSession?.Dispose();
-                    _fasterKVStore?.Dispose(); // Only safe to call after disposing all sessions
+                    _threadLocalSession.Dispose();
+                    _fasterKVStore.Dispose(); // Only safe to call after disposing all sessions
                     _logDevice?.Dispose();
-                    _threadLocalArrayBufferWriter?.Dispose();
+                    _threadLocalArrayBufferWriter.Dispose();
                 }
 
                 _disposed = true;

@@ -5,7 +5,7 @@
         <PackageId>Jering.KeyValueStore</PackageId>
         <Authors>JeremyTCD</Authors>
         <Title>A Highly Concurrent, Mixed-Storage Key-Value Store</Title>
-        <Description>Jering.KeyValueStore exposes a single class, MixedStorageKeyValueStore. This class has a simple set of methods for CRUD operations. Under-the-hood, it transparently stores data both in-memory and on-disk using a subset of Microsoft.Faster's features.</Description>
+        <Description>Jering.KeyValueStore exposes a single class, MixedStorageKVStore. This class has a simple set of methods for CRUD operations. Under-the-hood, it transparently stores data both in-memory and on-disk using a subset of Microsoft.Faster's features.</Description>
         <Copyright>© 2021 Jering. All rights reserved.</Copyright>
         <!-- TODO <PackageProjectUrl>https://www.jering.tech/utilities/jering.keyvaluestore/index</PackageProjectUrl>-->
         <RepositoryUrl>https://github.com/JeringTech/KeyValueStore</RepositoryUrl>
@@ -30,11 +30,27 @@
 
     <ItemGroup>
         <PackageReference Include="MessagePack" Version="2.2.85" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
         <PackageReference Include="Microsoft.FASTER.Core" Version="1.8.1" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\..\generators\Jering.KeyValueStore.Generators\Jering.KeyValueStore.Generators.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Strings.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Strings.resx</DependentUpon>
+      </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Update="Strings.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
     </ItemGroup>
 
 </Project>
