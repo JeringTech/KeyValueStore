@@ -4,11 +4,9 @@ A key-value store. Thin wrapper of [Microsoft.Faster](https://github.com/microso
 Faster's complexities, namely:
 
 - Sessions
-- Binary serialization
-- Use of `SpanByte`
-- Disposal
+- Support for variable length types using `SpanByte` and MessagePack for binary serialization
+- Periodic log compaction
 - Configuration for general use
-- TODO Log compaction
 
 `MixedStorageKVStore` is functional but the package Jering.KeyValueStore hasn't been published. The rest of this readme is a template.
 
