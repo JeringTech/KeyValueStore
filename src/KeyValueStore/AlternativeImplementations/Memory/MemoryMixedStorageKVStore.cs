@@ -14,7 +14,7 @@ namespace Jering.KeyValueStore
     /// </summary>
     internal class MemoryMixedStorageKVStore<TKey, TValue> : IMixedStorageKVStore<TKey, TValue>
     {
-        private static readonly MixedStorageKVStoreOptions _defaultMixedStorageKeyValueStoreOptions = new();
+        private static readonly MixedStorageKVStoreOptions _defaultMixedStorageKVStoreOptions = new();
 
         // Faster store
         private readonly FasterKV<TKey, Memory<byte>> _fasterKVStore;
@@ -39,17 +39,17 @@ namespace Jering.KeyValueStore
         /// <summary>
         /// Creates a <see cref="MemoryMixedStorageKVStore{TKey, TValue}"/>.
         /// </summary>
-        public MemoryMixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKeyValueStoreOptions = null)
+        public MemoryMixedStorageKVStore(MixedStorageKVStoreOptions? MixedStorageKVStoreOptions = null)
         {
-            mixedStorageKeyValueStoreOptions ??= _defaultMixedStorageKeyValueStoreOptions;
-            LogSettings logSettings = CreateSettings(mixedStorageKeyValueStoreOptions);
+            MixedStorageKVStoreOptions ??= _defaultMixedStorageKVStoreOptions;
+            LogSettings logSettings = CreateSettings(MixedStorageKVStoreOptions);
 
-            _fasterKVStore = new(mixedStorageKeyValueStoreOptions.IndexNumBuckets, logSettings);
+            _fasterKVStore = new(MixedStorageKVStoreOptions.IndexNumBuckets, logSettings);
             _clientSessionBuilder = _fasterKVStore.For(_memoryFunctions);
             _logDevice = logSettings.LogDevice; // _fasterKVStore.dispose doesn't dispose the underlying log device, so hold a reference for manual disposal
 
             _logAccessor = _fasterKVStore.Log;
-            _messagePackSerializerOptions = mixedStorageKeyValueStoreOptions.MessagePackSerializerOptions;
+            _messagePackSerializerOptions = MixedStorageKVStoreOptions.MessagePackSerializerOptions;
             _threadLocalArrayBufferWriter = new(CreateArrayBufferWriter, true);
             _threadLocalSession = new(CreateSession, true);
 
@@ -66,7 +66,7 @@ namespace Jering.KeyValueStore
             // TODO can we get a reference to the log device?
 
             _logAccessor = _fasterKVStore.Log;
-            _messagePackSerializerOptions = messagePackSerializerOptions ?? _defaultMixedStorageKeyValueStoreOptions.MessagePackSerializerOptions;
+            _messagePackSerializerOptions = messagePackSerializerOptions ?? _defaultMixedStorageKVStoreOptions.MessagePackSerializerOptions;
             _threadLocalArrayBufferWriter = new(CreateArrayBufferWriter, true);
             _threadLocalSession = new(CreateSession, true);
         }
