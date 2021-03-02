@@ -153,7 +153,7 @@ namespace Jering.KeyValueStore
                 fixed (byte* pointer = span)
                 {
                     var keySpanByte = SpanByte.FromFixedSpan(span);
-                    result = session.Delete(keySpanByte);
+                    result = session.Delete(ref keySpanByte);
                 }
             }
 
@@ -190,7 +190,7 @@ namespace Jering.KeyValueStore
                     keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, memory.Length);
                 }
 
-                (status, spanByteAndMemory) = (await session.ReadAsync(keySpanByte).ConfigureAwait(false)).Complete();
+                (status, spanByteAndMemory) = (await session.ReadAsync(ref keySpanByte).ConfigureAwait(false)).Complete();
             }
 
             // Clean up
