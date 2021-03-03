@@ -314,7 +314,7 @@ namespace Jering.KeyValueStore
         }
 
         /// <summary>
-        /// Disposes this instance. This method is not thread-safe. It should only be called after all other calls to this instance's methods have returned.
+        /// Disposes this instance.
         /// </summary>
         public void Dispose()
         {
@@ -323,7 +323,7 @@ namespace Jering.KeyValueStore
         }
 
         /// <summary>
-        /// Disposes the instance. This method is not thread-safe. It should only be called after all other calls to this instance's methods have returned.
+        /// Disposes the instance.
         /// </summary>
         /// <param name="disposing">True if the object is disposing or false if it is finalizing.</param>
         protected virtual void Dispose(bool disposing)

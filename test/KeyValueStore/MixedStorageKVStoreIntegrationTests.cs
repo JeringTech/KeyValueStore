@@ -242,7 +242,7 @@ namespace Jering.KeyValueStore.Tests
         public void LogFiles_DeletedOnClose()
         {
             // Arrange
-            var directory = Path.Combine(_fixture.TempDirectory, nameof(LogFiles_DeletedOnClose)); // Use a separate directory so the test is never affected by other tests
+            string directory = Path.Combine(_fixture.TempDirectory, nameof(LogFiles_DeletedOnClose)); // Use a separate directory so the test is never affected by other tests
             var dummyOptions = new MixedStorageKVStoreOptions()
             {
                 LogDirectory = directory,

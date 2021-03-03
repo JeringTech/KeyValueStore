@@ -4,14 +4,14 @@
         <TargetFrameworks>netstandard2.1</TargetFrameworks>
         <PackageId>Jering.KeyValueStore</PackageId>
         <Authors>JeremyTCD</Authors>
-        <Title>A Highly Concurrent, Mixed-Storage Key-Value Store</Title>
-        <Description>Jering.KeyValueStore exposes a single class, MixedStorageKVStore. This class has a simple set of methods for CRUD operations. Under-the-hood, it transparently stores data both in-memory and on-disk using a subset of Microsoft.Faster's features.</Description>
+        <Title>Mixed-Storage Key-Value Store for Application-Level Caching</Title>
+        <Description>Jering.KeyValueStore enables you to store key-value data across memory and disk. You can use this library for non-persistent, application-level caching. This library is a Microsoft.Faster wrapper.</Description>
         <Copyright>© 2021 Jering. All rights reserved.</Copyright>
         <!-- TODO <PackageProjectUrl>https://www.jering.tech/utilities/jering.keyvaluestore/index</PackageProjectUrl>-->
         <RepositoryUrl>https://github.com/JeringTech/KeyValueStore</RepositoryUrl>
         <PackageLicenseUrl>$(RepositoryUrl)/blob/master/License.md</PackageLicenseUrl>
         <PackageReleaseNotes>$(RepositoryUrl)/blob/master/Changelog.md</PackageReleaseNotes>
-        <PackageTags>key-value store concurrent memory disk faster</PackageTags>
+        <PackageTags>key-value store concurrent memory disk cache faster</PackageTags>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>

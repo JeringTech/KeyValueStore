@@ -4,7 +4,7 @@ namespace Jering.KeyValueStore.Performance
 {
     class Program
     {
-        static void Main(string[] args)
+        static void Main()
         {
             BenchmarkRunner.Run<LowMemoryUsageBenchmarks>();
         }
