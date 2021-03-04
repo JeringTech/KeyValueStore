@@ -21,7 +21,7 @@ namespace Jering.KeyValueStore
         private static readonly MixedStorageKVStoreOptions _defaultMixedStorageKVStoreOptions = new();
 
         // Faster store
-        private readonly FasterKV<SpanByte, SpanByte> _fasterKVStore;
+        private readonly FasterKV<SpanByte, SpanByte> _fasterKV;
         private readonly SpanByteFunctions<Empty> _spanByteFunctions = new();
         private readonly FasterKV<SpanByte, SpanByte>.ClientSessionBuilder<SpanByte, SpanByteAndMemory, Empty> _clientSessionBuilder;
 
@@ -51,9 +51,18 @@ namespace Jering.KeyValueStore
         private bool _disposed;
         private readonly IDevice? _logDevice;
 
+        /// <inheritdoc />
+        public FasterKV<SpanByte, SpanByte> FasterKV => _fasterKV;
+
         /// <summary>
         /// Creates a <see cref="MixedStorageKVStore{TKey, TValue}"/>.
         /// </summary>
+        /// <param name="mixedStorageKVStoreOptions">The options for the <see cref="MixedStorageKVStore{TKey, TValue}"/>.</param>
+        /// <param name="logger">The logger for log compaction events.</param>
+        /// <param name="fasterKVStore">
+        /// <para>The underlying <see cref="FasterKV{TKey, TValue}"/> for the <see cref="MixedStorageKVStore{TKey, TValue}"/>.</para>
+        /// <para>Specify this value if you want to manually configure it.</para>
+        /// </param>
         public MixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null,
             ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null,
             FasterKV<SpanByte, SpanByte>? fasterKVStore = null)
@@ -65,19 +74,19 @@ namespace Jering.KeyValueStore
             {
                 LogSettings logSettings = CreateLogSettings(mixedStorageKVStoreOptions);
                 _logDevice = logSettings.LogDevice; // _fasterKVStore.dispose doesn't dispose the underlying log device, so hold a reference for immediate manual disposal
-                _fasterKVStore = new(mixedStorageKVStoreOptions.IndexNumBuckets, logSettings);
+                _fasterKV = new(mixedStorageKVStoreOptions.IndexNumBuckets, logSettings);
             }
             else
             {
-                _fasterKVStore = fasterKVStore;
+                _fasterKV = fasterKVStore;
             }
 
             // Session
-            _clientSessionBuilder = _fasterKVStore.For(_spanByteFunctions);
+            _clientSessionBuilder = _fasterKV.For(_spanByteFunctions);
             _threadLocalSession = new(CreateSession, true);
 
             // Log
-            _logAccessor = _fasterKVStore.Log;
+            _logAccessor = _fasterKV.Log;
             _timeBetweenLogCompactionsMS = mixedStorageKVStoreOptions.TimeBetweenLogCompactionsMS;
             if (_timeBetweenLogCompactionsMS > -1)
             {
@@ -243,7 +252,7 @@ namespace Jering.KeyValueStore
 
                     // Update threshold
                     // Note that we can't simply check whether safeReadOnlyRegionByteSize has changed - when the log is compact, safeReadOnlyRegionByteSize may change (increase or decrease)
-                    // by small amounts every compaction. This is because records are shifted from head to tail, i.e. the set of records in the safe readonly region changes.
+                    // by small amounts every compaction. This is because records are shifted from head to tail, i.e. the set of records in the safe-readonly region changes.
                     if (_numConsecutiveLogCompactions >= NUM_CONSECUTIVE_COMPACTIONS_BEFORE_THRESHOLD_INCREASE)
                     {
                         _logCompactionThresholdBytes *= 2; // Max long is ~9200 petabytes, overflow is not an issue for now
@@ -346,7 +355,7 @@ namespace Jering.KeyValueStore
                     }
 
                     _threadLocalSession.Dispose();
-                    _fasterKVStore.Dispose(); // Only safe to call after disposing all sessions
+                    _fasterKV.Dispose(); // Only safe to call after disposing all sessions
                     _logDevice?.Dispose();
                     _threadLocalArrayBufferWriter.Dispose();
                 }

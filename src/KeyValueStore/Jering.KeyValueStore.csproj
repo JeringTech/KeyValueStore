@@ -4,8 +4,8 @@
         <TargetFrameworks>netstandard2.1</TargetFrameworks>
         <PackageId>Jering.KeyValueStore</PackageId>
         <Authors>JeremyTCD</Authors>
-        <Title>Mixed-Storage Key-Value Store for Application-Level Caching</Title>
-        <Description>Jering.KeyValueStore enables you to store key-value data across memory and disk. You can use this library for non-persistent, application-level caching. This library is a Microsoft.Faster wrapper.</Description>
+        <Title>Embeddable Mixed-Storage Key-Value Store for C#</Title>
+        <Description>Jering.KeyValueStore enables you to store key-value data across memory and disk.</Description>
         <Copyright>© 2021 Jering. All rights reserved.</Copyright>
         <!-- TODO <PackageProjectUrl>https://www.jering.tech/utilities/jering.keyvaluestore/index</PackageProjectUrl>-->
         <RepositoryUrl>https://github.com/JeringTech/KeyValueStore</RepositoryUrl>
@@ -31,7 +31,7 @@
     <ItemGroup>
         <PackageReference Include="MessagePack" Version="2.2.85" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
-        <PackageReference Include="Microsoft.FASTER.Core" Version="1.8.1" />
+        <PackageReference Include="Microsoft.FASTER.Core" Version="1.8.3" />
     </ItemGroup>
 
     <ItemGroup>

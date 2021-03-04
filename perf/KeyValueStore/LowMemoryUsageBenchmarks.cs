@@ -36,8 +36,8 @@ namespace Jering.KeyValueStore.Performance
         };
 
         // Concurrent inserts without compression
-        [GlobalSetup(Target = nameof(ConcurrentInserts_WithoutCompression))]
-        public void ConcurrentInserts_WithoutCompression_GlobalSetup()
+        [GlobalSetup(Target = nameof(Inserts_WithoutCompression))]
+        public void Inserts_WithoutCompression_GlobalSetup()
         {
             _mixedStorageKVStoreOptions = new()
             {
@@ -47,27 +47,27 @@ namespace Jering.KeyValueStore.Performance
             };
         }
 
-        [IterationSetup(Target = nameof(ConcurrentInserts_WithoutCompression))]
-        public void ConcurrentInserts_WithoutCompression_IterationSetup()
+        [IterationSetup(Target = nameof(Inserts_WithoutCompression))]
+        public void Inserts_WithoutCompression_IterationSetup()
         {
             _mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>(_mixedStorageKVStoreOptions);
         }
 
         [Benchmark]
-        public void ConcurrentInserts_WithoutCompression()
+        public void Inserts_WithoutCompression()
         {
             Parallel.For(0, NUM_INSERT_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyClassInstance));
         }
 
-        [IterationCleanup(Target = nameof(ConcurrentInserts_WithoutCompression))]
-        public void ConcurrentInserts_WithoutCompression_IterationCleanup()
+        [IterationCleanup(Target = nameof(Inserts_WithoutCompression))]
+        public void Inserts_WithoutCompression_IterationCleanup()
         {
             _mixedStorageKVStore.Dispose();
         }
 
         // Concurrent reads without compression
-        [GlobalSetup(Target = nameof(ConcurrentReads_WithoutCompression))]
-        public void ConcurrentReads_WithoutCompression_GlobalSetup()
+        [GlobalSetup(Target = nameof(Reads_WithoutCompression))]
+        public void Reads_WithoutCompression_GlobalSetup()
         {
             _mixedStorageKVStoreOptions = new()
             {
@@ -79,14 +79,14 @@ namespace Jering.KeyValueStore.Performance
             Parallel.For(0, NUM_READ_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyClassInstance));
         }
 
-        [IterationSetup(Target = nameof(ConcurrentReads_WithoutCompression))]
-        public void ConcurrentReads_WithoutCompression_IterationSetup()
+        [IterationSetup(Target = nameof(Reads_WithoutCompression))]
+        public void Reads_WithoutCompression_IterationSetup()
         {
             _readTasks.Clear();
         }
 
         [Benchmark]
-        public async Task ConcurrentReads_WithoutCompression()
+        public async Task Reads_WithoutCompression()
         {
             Parallel.For(0, NUM_READ_OPERATIONS, key => _readTasks.Enqueue(_mixedStorageKVStore.ReadAsync(key)));
             foreach(ValueTask<(Status, DummyClass?)> task in _readTasks)
@@ -95,8 +95,8 @@ namespace Jering.KeyValueStore.Performance
             }
         }
 
-        [GlobalCleanup(Target = nameof(ConcurrentReads_WithoutCompression))]
-        public void ConcurrentReads_WithoutCompression_GlobalCleanup()
+        [GlobalCleanup(Target = nameof(Reads_WithoutCompression))]
+        public void Reads_WithoutCompression_GlobalCleanup()
         {
             _mixedStorageKVStore.Dispose();
         }

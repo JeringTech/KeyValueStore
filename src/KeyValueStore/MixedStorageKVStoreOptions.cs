@@ -90,7 +90,7 @@ namespace Jering.KeyValueStore
         public bool DeleteLogOnClose { get; set; } = true;
 
         /// <summary>
-        /// <para>The options for serializing values.</para>
+        /// <para>The options for serializing data using MessagePack C#.</para>
         /// <para>MessagePack C# is an efficient binary serialization library. Refer to their <a href="https://github.com/neuecc/MessagePack-CSharp">documentation</a>
         /// for details.</para>
         /// <para>Defaults to <see cref="MessagePackSerializerOptions.Standard"/> with compression using <see cref="MessagePackCompression.Lz4BlockArray"/>.</para>

@@ -33,9 +33,9 @@
       },
       "Microsoft.FASTER.Core": {
         "type": "Direct",
-        "requested": "[1.8.1, )",
-        "resolved": "1.8.1",
-        "contentHash": "hx4rCI9nuuEFIIrLZf661IsUpnF6YAd2XhnHJwNdKXGK0JlQ/loxsRO1vZi74dqwUpG3a3JVkeuuxIAkzb3zUA==",
+        "requested": "[1.8.3, )",
+        "resolved": "1.8.3",
+        "contentHash": "LCSqgkfuWlPZJwgHRL6M+q/15p0ZbMV62zVFFXiRz3Nt7HUjd8JpQIBlvAqG2sLXjaLQxJbZQZwGKA3aDhsN4A==",
         "dependencies": {
           "System.Interactive.Async": "4.1.1",
           "System.Runtime.CompilerServices.Unsafe": "4.7.1"
