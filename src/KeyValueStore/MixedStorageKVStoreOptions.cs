@@ -20,7 +20,7 @@ namespace Jering.KeyValueStore
 
         /// <summary>
         /// <para>The size of a page in Faster's log.</para>
-        /// <para>A page is a contiguous block of storage in-memory or on-disk.</para>
+        /// <para>A page is a contiguous block of in-memory or on-disk storage.</para>
         /// <para>This value is ignored if a <see cref="FasterKV{Key, Value}"/> instance is supplied to the <see cref="MixedStorageKVStore{TKey, TValue}"/> constructor.</para>
         /// <para>Defaults to 25 (2^25 = 33.5 MB).</para>
         /// </summary>
@@ -36,7 +36,8 @@ namespace Jering.KeyValueStore
 
         /// <summary>
         /// <para>The size of a segment of the on-disk region of Faster's log.</para>
-        /// <para>The on-disk region of the log is stored across multiple files. Each file is referred to as a segment.</para>
+        /// <para>What is a segment? The on-disk region of the log is stored across multiple files, each file is referred to as a segment.</para>
+        /// <para>For performance reasons, segments are "pre-allocated". This means they are not created empty and left to grow gradually, instead they are created at the size specified by this value and populated gradually.</para>
         /// <para>This value is ignored if a <see cref="FasterKV{Key, Value}"/> instance is supplied to the <see cref="MixedStorageKVStore{TKey, TValue}"/> constructor.</para>
         /// <para>Defaults to 28 (268 MB).</para>
         /// </summary>
@@ -66,15 +67,15 @@ namespace Jering.KeyValueStore
         /// <summary>
         /// <para>The time between Faster log compaction attempts.</para>
         /// <para>If this value is negative, log compaction is disabled.</para>
-        /// <para>Defaults to 60000 (1 minute)</para>
+        /// <para>Defaults to 60000</para>
         /// </summary>
         public int TimeBetweenLogCompactionsMS { get; set; } = 60_000;
 
         // TODO what if a FasterKV instance is supplied and MemorySizeBits is 0 or negative?
         /// <summary>
         /// <para>The initial log compaction threshold.</para>
-        /// <para>Initially, log compactions only run when the Faster log's safe readonly region's size is larger than or equal to this value.</para>
-        /// <para>If log compactions run 5 times in a row, this value is doubled. Why? Consider the situation where the safe readonly region is already 
+        /// <para>Initially, log compactions only run when the Faster log's safe-readonly region's size is larger than or equal to this value.</para>
+        /// <para>If log compactions run 5 times in a row, this value is doubled. Why? Consider the situation where the safe-readonly region is already 
         /// compact, but still larger than the threshold. Not increasing the threshold would result in numerous redundant compaction runs.</para>
         /// <para>If this value is less than or equal to 0, the initial log compaction threshold is 2 * memory size in bytes (<see cref="MemorySizeBits"/>).</para>
         /// <para>Defaults to 0</para>

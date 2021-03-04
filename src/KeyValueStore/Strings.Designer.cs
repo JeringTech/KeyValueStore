@@ -61,7 +61,7 @@ namespace Jering.KeyValueStore {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to LogCompacted. Safe readonly region byte size before compaction = {0}, after compaction = {1}. Num consecutive compactions = {2}..
+        ///   Looks up a localized string similar to LogCompacted. safe-readonly region byte size before compaction = {0}, after compaction = {1}. Num consecutive compactions = {2}..
         /// </summary>
         internal static string LogTrace_LogCompacted {
             get {
@@ -79,7 +79,7 @@ namespace Jering.KeyValueStore {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Skipping log compaction. Current safe readonly region byte size = {0}, log compaction threshold = {1}..
+        ///   Looks up a localized string similar to Skipping log compaction. Current safe-readonly region byte size = {0}, log compaction threshold = {1}..
         /// </summary>
         internal static string LogTrace_SkippingLogCompaction {
             get {

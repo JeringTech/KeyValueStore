@@ -388,7 +388,7 @@ namespace Jering.KeyValueStore.Tests
                 }
             }
 
-            // We compact 20% of the safe readonly region of the log. Since we inserted then updated, compaction here means removal.
+            // We compact 20% of the safe-readonly region of the log. Since we inserted then updated, compaction here means removal.
             // 90048 * 0.8 = 72038, ~72000 (missing 38 bytes likely has to do with the fact that we can't remove only part of a record). 
             string expectedResultStart = $"{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 90048, 72000, 1)}";
             int expectedResultStartLength = expectedResultStart.Length;
@@ -495,7 +495,7 @@ namespace Jering.KeyValueStore.Tests
             }
 
             // Runs 5 consecutive compactions, increases threshold, runs 5 more consecutive compactions (all redundant), increases threshold above 
-            // safe readonly region size, skips compactions thereafter.
+            // safe-readonly region size, skips compactions thereafter.
             string expectedResultStart = @$"{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 90048, 72000, 1)}
 {LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 72000, 57600, 2)}
 {LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 57600, 46080, 3)}
