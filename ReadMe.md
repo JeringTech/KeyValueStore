@@ -32,7 +32,7 @@ Faster's complexities, namely:
 [About](#about)  
 
 ## Overview
-Jering.KeyValueStore enables you to store key-value data across memory and disk. You can use this library for non-persistent, application-level caching.
+Jering.KeyValueStore enables you to store key-value data across memory and disk. Use this library for non-persistent, application-level caches.
 
 Usage example:
 
@@ -65,11 +65,11 @@ Assert.Null(result);
 ```
 
 This library is a third-party wrapper of [Microsoft's Faster key-value store](https://github.com/microsoft/FASTER) (Faster). Faster introduces a novel, lock-free system 
-that is extremely performant in highly concurrent situations. This document requires a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) 
+that is performant in highly concurrent situations. This document requires a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) 
 for a quick primer. 
 
 The main class this library exposes, `MixedStorageKVStore`, isn't as optimized as a custom `FasterKV` instance could be. Also, it only exposes a subset of Faster's features.
-In particular, persistence is not exposed (checkpoints and recovery). That said, `MixedStorageKVStore` is generally faster than [alternatives](#alternatives) 
+In particular, persistence is not exposed (though you can handle it [manually](#advanced-configuration)). That said, `MixedStorageKVStore` performs well relative to [alternatives](#alternatives) 
 and is trivial to use. Refer to [Relationship with Faster](#relationship-with-faster) for details on what this library provides on top of faster as well as drawbacks to using 
 this library vs Faster directly.
 
@@ -91,8 +91,8 @@ Using .Net CLI:
 
 ## Usage
 ### Key and Value Types
-`MixedStorageKVStore` keys and values can be [any type MessagePack C# can serialize](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) (MessagePack C# is a popular, performant 
-binary serialization library. Signalr, Microsoft's websockets library uses it). Note that custom types must be annotated according 
+`MixedStorageKVStore` keys and values can be [any type MessagePack C# can serialize](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) (MessagePack C# is a performant 
+binary serialization library - Signalr, Microsoft's websockets library uses it). Note that custom types must be annotated according 
 to [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization). 
 
 #### Common Key and Value Types
@@ -103,7 +103,7 @@ Given class `DummyClass`:
 [MessagePackObject]
 public class DummyClass
 {
-    [Key(0)]
+    [Key(0)] // Similar to JsonPropertyNameAttribute for System.Text.Json
     public string? DummyString { get; set; }
 
     [Key(1)]
@@ -183,7 +183,7 @@ Assert.Equal(dummyStructInstance.DummyLong, result.DummyLong);
 #### Mutable Object Type as Key Type
 Under-the-hood, the binary serialized form of what you pass as keys are the actual keys.
 This means caution is required if you specify a mutable object type as your key type.
-For example, consider the situation where you insert a value using a `DummyClass` (defined above) instance as key, and then change a member of the instance. 
+For example, consider the situation where you insert a value using a `DummyClass` (defined [above](https://github.com/JeringTech/KeyValueStore#common-key-and-value-types)) instance as key, and then change a member of the instance. 
 When you try to read the value using the same instance, you either read nothing or a different value:
 
 ```csharp
@@ -220,17 +220,12 @@ int numRecords = 100_000;
 Parallel.For(0, numRecords, key => mixedStorageKVStore.Upsert(key, "dummyString1"));
 
 // Concurrent reads
-List<Task<(Status, string?)>> pendingTasks = new();
-for (int i = 0; i < numRecords; i++)
+ConcurrentQueue<ValueTask<(Status, string?)>> pendingTasks = new();
+Parallel.For(0, numRecords, key => pendingTasks.Enqueue(mixedStorageKVStore.ReadAsync(key)));
+foreach (ValueTask<(Status, string?)> task in pendingTasks)
 {
-    pendingTasks.Add(mixedStorageKVStore.ReadAsync(i).AsTask()); // ReadAsync returns ValueTask, convert to Task so we can use Task.WhenAll
-}
-await Task.WhenAll(pendingTasks).ConfigureAwait(false);
-
-// Verify reads
-for (int i = 0; i < numRecords; i++)
-{
-    Assert.Equal((Status.OK, "dummyString1"), pendingTasks[i].Result);
+    // Await and verify
+    Assert.Equal((Status.OK, "dummyString1"), await task.ConfigureAwait(false));
 }
 
 // Concurrent updates
@@ -238,16 +233,11 @@ Parallel.For(0, numRecords, key => mixedStorageKVStore.Upsert(key, "dummyString2
 
 // Read again so we can verify updates
 pendingTasks.Clear();
-for (int i = 0; i < numRecords; i++)
+Parallel.For(0, numRecords, key => pendingTasks.Enqueue(mixedStorageKVStore.ReadAsync(key)));
+foreach (ValueTask<(Status, string?)> task in pendingTasks)
 {
-    pendingTasks.Add(mixedStorageKVStore.ReadAsync(i).AsTask()); // ReadAsync returns ValueTask, convert to Task so we can use Task.WhenAll
-}
-await Task.WhenAll(pendingTasks).ConfigureAwait(false);
-
-// Verify updates
-for (int i = 0; i < numRecords; i++)
-{
-    Assert.Equal((Status.OK, "dummyString2"), pendingTasks[i].Result);
+    // Await and verify
+    Assert.Equal((Status.OK, "dummyString2"), await task.ConfigureAwait(false));
 }
 
 // Concurrent deletes
@@ -255,16 +245,11 @@ Parallel.For(0, numRecords, key => mixedStorageKVStore.Delete(key));
 
 // Read again so we can verify deletes
 pendingTasks.Clear();
-for (int i = 0; i < numRecords; i++)
+Parallel.For(0, numRecords, key => pendingTasks.Enqueue(mixedStorageKVStore.ReadAsync(key)));
+foreach (ValueTask<(Status, string?)> task in pendingTasks)
 {
-    pendingTasks.Add(mixedStorageKVStore.ReadAsync(i).AsTask()); // ReadAsync returns ValueTask, convert to Task so we can use Task.WhenAll
-}
-await Task.WhenAll(pendingTasks).ConfigureAwait(false);
-
-// Verify deletes
-for (int i = 0; i < numRecords; i++)
-{
-    Assert.Equal((Status.NOTFOUND, null), pendingTasks[i].Result);
+    // Await and verify
+    Assert.Equal((Status.NOTFOUND, null), await task.ConfigureAwait(false));
 }
 ```
 
@@ -280,7 +265,20 @@ var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
 ```
 
-See [API](#api) for the full list of options.  
+The following table lists all available options.
+
+#### MixedStorageKVStoreOptions
+| Option | Type | Description | Default |  
+| ------ | ---- | ----------- | ------- |
+| IndexNumBuckets | `long` | The number of buckets in Faster's main index. Each bucket is 64 bits. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 1048576 (64 MB index) |
+| PageSizeBits | `int` | The size of a page in Faster's log. A page is a contiguous block of in-memory or on-disk storage. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 25 (2^25 = 33.5 MB) |
+| MemorySizeBits | `int` | The size of the in-memory region of Faster's log. If the log outgrows this region, overflow is moved to its on-disk region. Memory size must be at least two pages large. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 26 (2^26 = 67 MB) |
+| SegmentSizeBits | `int` | The size of a segment of the on-disk region of Faster's log. What is a segment? The on-disk region of the log is stored across multiple files, each file is referred to as a segment. For performance reasons, segments are "pre-allocated". This means they are not created empty and left to  grow gradually, instead they are created at the size specified by this value and populated gradually. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 28 (268 MB)  |
+| LogDirectory | `string` | The directory containing the on-disk region of Faster's log. If this value is `null`, whitespace or an empty string, log files are placed in "&lt;temporary path&gt;/FasterLogs" where "&lt;temporary path&gt;" is the value returned by `Path.GetTempPath`. Note that nothing is written to disk while your log fits in-memory. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `null`  |
+| LogFileNamePrefix | `string` | The Faster-log filename prefix. The on-disk region of the log is stored across multiple files. Each file is referred to as a segment. Each segment has file name "&lt;log file name prefix&gt;.log.&lt;segment number&gt;". If this value is `null`, whitespace or an empty string, a random `Guid` is used as the prefix. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `null`  |
+| TimeBetweenLogCompactionsMS | `int` | The time between Faster-log compaction attempts. If this value is negative, log compaction is disabled. | `60000`  |
+| InitialLogCompactionThresholdBytes | `long` | The initial log compaction threshold. Initially, log compactions only run when the Faster-log's safe-readonly region's size is larger than or equal to this value. If log compactions run 5 times in a row, this value is doubled. Why? Consider the situation where the safe-readonly region is already compact, but still larger than the threshold. Not increasing the threshold would result in continual redundant compaction runs. If this value is less than or equal to 0, the initial log compaction threshold is 2 * memory size (`MemorySizeBits`). | `0`  |
+| DeleteLogOnClose | `bool` | The value specifying whether Faster-log files are deleted when the `MixedStorageKVStore` is disposed or finalized (at which points underlying Faster-log files are closed). This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `true` |
 
 #### Advanced Configuration
 If you'd like greater control over Faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to the `MixedStorageKVStore` constructor:
@@ -300,17 +298,19 @@ var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions, fasterKVStore: fasterKV);
 ```
 
+With a reference to the`FasterKV<SpanByte, SpanByte>` instance, you can manually handle Faster features like persistence (checkpoints and recovery).
+
 ### On-Disk Data
-First, some details:
+Basics:
 
 - When is data written to disk? `MixedStorageKVStore` stores data across memory and disk. Data is written to disk when
 the in-memory region of your store is full. You can configure the size of the in-memory region using 
 [`MixedStorageKVStoreOptions.MemorySizeBits`](TODO).
 
-- Where is on-disk data located? By default, `<temp path>/FasterLogs`. You can change this directory by setting
-[`MixedStorageKVStoreOptions.LogDirectory`](TODO).
+- Where is on-disk data located? By default, `<temp path>/FasterLogs`, where <temp path> is the value returned by `Path.GetTempPath`. 
+You can change this directory using [`MixedStorageKVStoreOptions.LogDirectory`](TODO).
 
-The following example generates files on-disk that you can examine:
+The following example generates files that you can examine:
 
 ```csharp
 var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
@@ -325,28 +325,85 @@ var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVSto
 Parallel.For(0, 100_000, key => mixedStorageKVStore.Upsert(key, "dummyString1"));
 ```
 
-You will find a file in `<temp path>/FasterLogs` named `<guid>.log.0`, where `<temp path>` is the value returned by 
-`Path.GetTempPath`. An example data filepath on windows might look like `C:/Users/UserName/AppData/Local/Temp/FasterLogs/836b4239-ab56-4fa8-b3a5-833cbd198044.log.0`.
+You will find a file in `<temp path>/FasterLogs` named `<guid>.log.0`. An example absolute filepath on windows might look like 
+`C:/Users/UserName/AppData/Local/Temp/FasterLogs/836b4239-ab56-4fa8-b3a5-833cbd198044.log.0`.
 
 #### Managing Files
-By default, files are deleted when the underlying Faster instance closes them. This occurs on `MixedStorageKVStore` disposal or finalization.
-If your program dies in such a way that cleanup logic doesn't run to completion, files may unexpectedly not get deleted.  
-Files that don't get deleted waste disk space on servers. A simple way to avoid such disk space wastage is to:
+By default, files are deleted on `MixedStorageKVStore` disposal or finalization.
+If your program terminates abruptly, files may not get deleted.
+We suggest:
 
-- Place all files in the same directory by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](TODO) for all `MixedStorageKVStore`s. This is the default behaviour -
-  all files placed in `<temp path>/FasterLogs`.
-- On application initialization, if the directory already exists, delete it.
+- Placing all files in the same directory. Do this by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](TODO) for all `MixedStorageKVStore`s. This is the default behaviour -
+  all files are placed in `<temp path>/FasterLogs`.
+- On application initialization, if the directory exists, delete it.
+    ```csharp
+    try
+    {
+        Directory.Delete(Path.Combine(Path.GetTempPath(), "FasterLogs"), true);
+    }
+    catch
+    {
+        // Do nothing
+    }
+    ```
 
 #### Managing Disk Space
-`MixedStorageKVStore` compacts data periodically (log compaction). Log compaction ensures that data is stored efficiently - it does not truncate data, in other words it does not remove
-old or stale data. You can set [`MixedStorageKVStoreOptions.TimeBetweenLogCompactionsMS`](TODO) and [`MixedStorageKVStoreOptions.InitialLogCompactionThresholdBytes`](TODO)
-to configure log compaction.
-
-Given the above, data can grow boundlessly. Therefore, we recommend monitoring disk space the same way you'd monitor memory or CPU usage. For example, if you're using an Azure VM,
-set an alert for when disk space usage reaches a certain percentage.
+While `MixedStorageKVStore` performs [log compaction](log-compaction) periodically, data can only be so compact. So long as you're adding new key-value pairs, 
+the size of your data can grow boundlessly. Therefore, we recommend monitoring disk space the same way you would monitor memory or CPU usage. For example, if you're 
+using an Azure VM, consider setting an alert for when disk space usage reaches a certain percentage.
 
 ## API
-TODO
+TODO fasterkv property
+
+### IMixedStorageKVStore<TKey, TValue>.Upsert
+#### Signature
+```
+void Upsert(TKey key, TValue obj);
+```
+#### Description
+Updates or inserts a record.
+#### Parameters
+- `key`
+  - Type: `TKey`
+  - Description: The key of the record.
+- `obj`
+  - Type: `TValue`
+  - Description: The new value of the record.
+#### Exceptions
+- `ObjectDisposedException`
+  - Thrown if the instance or a dependency is disposed.
+
+### IMixedStorageKVStore<TKey, TValue>.Delete
+#### Signature
+```
+Status Delete(TKey key);
+```
+#### Description
+Deletes a record.
+#### Parameters
+- `key`
+  - Type: `TKey`
+  - Description: The key of the record to delete.
+#### Exceptions
+- `ObjectDisposedException`
+  - Thrown if the instance or a dependency is disposed.
+
+### IMixedStorageKVStore<TKey, TValue>.ReadAsync
+#### Signature
+```
+ValueTask<(Status, TValue?)> ReadAsync(TKey key);
+```
+#### Description
+Reads a record asynchronously.
+#### Parameters
+- `key`
+  - Type: `TKey`
+  - Description: The key of the record to read.
+#### Returns
+The task representing the asynchronous operation.
+#### Exceptions
+- `ObjectDisposedException`
+  - Thrown if the instance or a dependency is disposed.
 
 #### Serialization Options
 Configure MessagePack C# by specifying `MixedStorageKVStoreOptions.MessagePackSerializerOptions`. Of particular note is compression.
@@ -364,10 +421,18 @@ var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVSto
 
 ## Performance
 ### Benchmarks
-TODO
+TODO notes
+- class used
+- unlike alternatives doesn't block on write
 
-### Notes
 TODO
+- upserts
+- reads
+
+### Future improvements
+TODO Low hanging fruit
+- don't serialize blittable types
+- read only cache
 
 ## Building and Testing
 You can build and test this project in Visual Studio 2019.
@@ -375,8 +440,14 @@ You can build and test this project in Visual Studio 2019.
 ## Relationship with Faster
 ### Features on Top of Faster
 TODO
-### Why You Might Use Faster Directly
-TODO
+- Sessions
+- Support for variable length types using `SpanByte` and MessagePack for binary serialization
+- Periodic log compaction
+### When You Might Want to Use Faster Directly
+TODO apart from implementing the above features in different ways
+- custom functions
+- rmw
+- log operations (scanning, truncation etc)
 
 ## Alternatives
 <!-- TODO pros/cons -->
@@ -392,10 +463,10 @@ TODO
 ## Related Concepts
 ### Faster Basics
 TODO overview
-TODO the log
-TODO log compaction
-TODO object log and spanbyte
-TODO sessions
+- log
+- log compaction
+- object log and spanbyte
+- sessions and concurrency
 
 ## Contributing
 Contributions are welcome!
