@@ -244,8 +244,8 @@ namespace Jering.KeyValueStore
 
                     if (_logTrace)
                     {
-                        _logger.LogTrace(string.Format(Strings.LogTrace_LogCompacted, 
-                            safeReadOnlyRegionByteSize, 
+                        _logger.LogTrace(string.Format(Strings.LogTrace_LogCompacted,
+                            safeReadOnlyRegionByteSize,
                             _logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress,
                             _numConsecutiveLogCompactions));
                     }
@@ -313,6 +313,7 @@ namespace Jering.KeyValueStore
             var logSettings = new LogSettings
             {
                 LogDevice = Devices.CreateLogDevice(Path.Combine(logDirectory, $"{logFileName}.log"),
+                    preallocateFile: true,
                     deleteOnClose: options.DeleteLogOnClose),
                 PageSizeBits = options.PageSizeBits,
                 MemorySizeBits = options.MemorySizeBits,

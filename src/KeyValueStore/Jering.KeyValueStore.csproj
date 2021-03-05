@@ -5,7 +5,7 @@
         <PackageId>Jering.KeyValueStore</PackageId>
         <Authors>JeremyTCD</Authors>
         <Title>Embeddable Mixed-Storage Key-Value Store for C#</Title>
-        <Description>Jering.KeyValueStore enables you to store key-value data across memory and disk.</Description>
+        <Description>Jering.KeyValueStore enables you to store key-value data across memory and disk. This library is a Microsoft.Faster wrapper.</Description>
         <Copyright>© 2021 Jering. All rights reserved.</Copyright>
         <!-- TODO <PackageProjectUrl>https://www.jering.tech/utilities/jering.keyvaluestore/index</PackageProjectUrl>-->
         <RepositoryUrl>https://github.com/JeringTech/KeyValueStore</RepositoryUrl>

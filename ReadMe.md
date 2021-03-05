@@ -1,19 +1,7 @@
-# WIP
-
-A key-value store. Thin wrapper of [Microsoft.Faster](https://github.com/microsoft/FASTER) that abstracts away some of
-Faster's complexities, namely:
-
-- Sessions
-- Support for variable length types using `SpanByte` and MessagePack for binary serialization
-- Periodic log compaction
-- Configuration for general use
-
-`MixedStorageKVStore` is functional but the package Jering.KeyValueStore hasn't been published. This readme is incomplete.
-
 # Jering.KeyValueStore
-[![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/Jering.KeyValueStore-CI?branchName=master)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=1?branchName=master)
-[![codecov](https://codecov.io/gh/JeringTech/KeyValueStore/branch/master/graph/badge.svg)](https://codecov.io/gh/JeringTech/KeyValueStore)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/JeringTech/KeyValueStore/blob/master/License.md)
+[![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/Jering.KeyValueStore-CI?branchName=main)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=1?branchName=main)
+[![codecov](https://codecov.io/gh/JeringTech/KeyValueStore/branch/main/graph/badge.svg)](https://codecov.io/gh/JeringTech/KeyValueStore)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/JeringTech/KeyValueStore/blob/main/License.md)
 [![NuGet](https://img.shields.io/nuget/vpre/Jering.KeyValueStore.svg?label=nuget)](https://www.nuget.org/packages/Jering.KeyValueStore/)
 
 ## Table of Contents
@@ -64,15 +52,15 @@ Assert.Equal(Status.NOTFOUND, status);
 Assert.Null(result);
 ```
 
-This library is a wrapper of [Microsoft's Faster key-value store](https://github.com/microsoft/FASTER) (Faster). Faster introduces a novel, performant, lock-free concurrency system. This document requires a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) 
-for a quick primer. 
+This library is a wrapper of [Microsoft's Faster key-value store](https://github.com/microsoft/FASTER) (Faster). Faster introduces a novel, performant, lock-free concurrency system. This document 
+requires a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) for a quick primer as well as an overview of the features this library provides on top of Faster. 
 
 Should I use this library over plain Faster? `MixedStorageKVStore`, isn't as optimized as a custom `FasterKV` instance could be. 
-Also, at present, it only wraps a [subset of Faster's features](#feature-list). That said, `MixedStorageKVStore`:
+Also, at present, it only wraps a subset of Faster's features. That said, `MixedStorageKVStore`:
 
-- Performs well relative to non-Faster [alternatives](#alternatives)
+- [Performs well](#performance) relative to non-Faster [alternatives](#alternatives)
 - Is [trivial to use](#usage)
-- Exposes most Faster features that it does not wrap through the underlying `FasterKV` instance (see [`MixedStorageKVSgtore.FasterKV](#TODO) and [manual Faster configuration](#advanced-configuration))
+- Exposes most Faster features that it does not wrap. This is done by allowing consumers to specify/access the underlying `FasterKV` instance (see [`MixedStorageKVSgtore.FasterKV](#TODO) and [manual Faster configuration](#advanced-configuration)).
 
 You can use this library to begin with. Then, if/when performance bottlenecks in your applications surface, you can transition to situationally optimized `FasterKV` instances.
 
@@ -80,7 +68,9 @@ You can use this library to begin with. Then, if/when performance bottlenecks in
 - .NET Standard 2.1
 
 ## Platforms
-Works on Windows, macOS, and Linux systems.
+- Windows
+- macOS
+- Linux
  
 ## Installation
 Using Package Manager:
@@ -95,7 +85,7 @@ Using .Net CLI:
 ## Usage
 ### Key and Value Types
 `MixedStorageKVStore` keys and values can be [any type MessagePack C# can serialize](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) (MessagePack C# is a performant 
-binary serialization library - Signalr, Microsoft's websockets library uses it). Note that custom types must be annotated according 
+binary serialization library used by popular libraries such as Microsoft's Signalr websockets library). Note that custom types must be annotated according 
 to [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization). 
 
 #### Common Key and Value Types
@@ -106,7 +96,7 @@ Given class `DummyClass`:
 [MessagePackObject]
 public class DummyClass
 {
-    [Key(0)] // Similar to JsonPropertyNameAttribute for System.Text.Json
+    [Key(0)] // Analagous to System.Text.Json.Serialization.JsonPropertyNameAttribute
     public string? DummyString { get; set; }
 
     [Key(1)]
@@ -268,21 +258,21 @@ var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
 ```
 
-The following table lists all available options.
+The following table lists all options.
 
 #### MixedStorageKVStoreOptions
 | Option | Type | Description | Default |  
 | ------ | ---- | ----------- | ------- |
-| IndexNumBuckets | `long` | The number of buckets in Faster's main index. Each bucket is 64 bits. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 1048576 (64 MB index) |
+| IndexNumBuckets | `long` | The number of buckets in Faster's index. Each bucket is 64 bits. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 1048576 (64 MB index) |
 | PageSizeBits | `int` | The size of a page in Faster's log. A page is a contiguous block of in-memory or on-disk storage. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 25 (2^25 = 33.5 MB) |
 | MemorySizeBits | `int` | The size of the in-memory region of Faster's log. If the log outgrows this region, overflow is moved to its on-disk region. Memory size must be at least two pages large. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 26 (2^26 = 67 MB) |
-| SegmentSizeBits | `int` | The size of a segment of the on-disk region of Faster's log. What is a segment? The on-disk region of the log is stored across multiple files, each file is referred to as a segment. For performance reasons, segments are "pre-allocated". This means they are not created empty and left to  grow gradually, instead they are created at the size specified by this value and populated gradually. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 28 (268 MB)  |
+| SegmentSizeBits | `int` | The size of a segment of the on-disk region of Faster's log. What is a segment? What is a segment? Records on disk are split into groups called segments. Each segment corresponds to a file. For performance reasons, segments are "pre-allocated". This means they are not created empty and left to grow gradually, instead they are created at the size specified by this value and populated gradually. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 28 (268 MB)  |
 | LogDirectory | `string` | The directory containing the on-disk region of Faster's log. If this value is `null`, whitespace or an empty string, log files are placed in "&lt;temporary path&gt;/FasterLogs" where "&lt;temporary path&gt;" is the value returned by `Path.GetTempPath`. Note that nothing is written to disk while your log fits in-memory. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `null`  |
 | LogFileNamePrefix | `string` | The Faster-log filename prefix. The on-disk region of the log is stored across multiple files. Each file is referred to as a segment. Each segment has file name "&lt;log file name prefix&gt;.log.&lt;segment number&gt;". If this value is `null`, whitespace or an empty string, a random `Guid` is used as the prefix. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `null`  |
 | TimeBetweenLogCompactionsMS | `int` | The time between Faster-log compaction attempts. If this value is negative, log compaction is disabled. | `60000`  |
 | InitialLogCompactionThresholdBytes | `long` | The initial log compaction threshold. Initially, log compactions only run when the Faster-log's safe-readonly region's size is larger than or equal to this value. If log compactions run 5 times in a row, this value is doubled. Why? Consider the situation where the safe-readonly region is already compact, but still larger than the threshold. Not increasing the threshold would result in continual redundant compaction runs. If this value is less than or equal to 0, the initial log compaction threshold is 2 * memory size (`MemorySizeBits`). | `0`  |
 | DeleteLogOnClose | `bool` | The value specifying whether Faster-log files are deleted when the `MixedStorageKVStore` is disposed or finalized (at which points underlying Faster-log files are closed). This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `true` |
-| MessagePackSerializerOptions | `MessagePackSerializerOptions` | The options for serializing data using MessagePack C#. MessagePack C# is an efficient binary serialization library. Refer to their [documentation](https://github.com/neuecc/MessagePack-CSharp) for details. | [Standard options with Lz4BlockArray compression](https://github.com/neuecc/MessagePack-CSharp#lz4-compression) |
+| MessagePackSerializerOptions | `MessagePackSerializerOptions` | The options for serializing data using MessagePack C#. MessagePack C# is an efficient binary serialization library. Refer to [MessagePack C# documentation](https://github.com/neuecc/MessagePack-CSharp) for details. | [Standard options with Lz4BlockArray compression](https://github.com/neuecc/MessagePack-CSharp#lz4-compression) |
 
 #### Advanced Configuration
 If you'd like greater control over Faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to the `MixedStorageKVStore` constructor:
@@ -352,7 +342,7 @@ We suggest:
 #### Managing Disk Space
 While `MixedStorageKVStore` performs [log compaction](log-compaction) periodically, data can only be so compact. So long as you're adding new records, 
 the size of your data can grow boundlessly. Therefore, we recommend monitoring disk space the same way you would monitor memory or CPU usage. For example, if you're 
-using an Azure VM, consider setting an alert for when disk space usage reaches a certain percentage.
+using a cloud VM, consider setting an alert for when disk space usage reaches a certain percentage.
 
 ## API
 ### MixedStorageKVStore<TKey, TValue>
@@ -440,19 +430,25 @@ The task representing the asynchronous operation.
 ### Benchmarks
 The following benchmarks use `MixedStorageKVStore`s with key type `int` and value type `DummyClass` as defined and populated in [this section](#common-key-and-value-types).  
 
-MessagePack C# compression is disabled and the vast majority of the store is on-disk (8 KB in-memory region, multi-MB on-disk region). These conditions provide basis for comparison
-with disk-based alternatives like Sqlite and LiteDB.  
+`MixedStorageKVStore`s are configured to provide basis for comparison with disk-based alternatives like Sqlite and LiteDB:
 
-Inserts_WithoutCompression performs 350,000 single-record insertions per iteration.  
+- MessagePack C# compression is disabled 
+- The vast majority of the store is on-disk (8 KB in-memory region, multi-MB on-disk region)
+- Log compaction is disabled
 
-Reads_WithoutCompression performs 75,000 single-record reads per iteration.
+Benchmarks:
+
+- Inserts_WithoutCompression performs 350,000 single-record insertions per iteration.  
+- Reads_WithoutCompression performs 75,000 single-record reads per iteration.
 
 View source [here](https://github.com/JeringTech/KeyValueStore/blob/main/perf/KeyValueStore/LowMemoryUsageBenchmarks.cs).
 
-|                               Method |       Mean |    Error |   StdDev |     Median |      Gen 0 |      Gen 1 | Gen 2 | Allocated |
-|------------------------------------- |-----------:|---------:|---------:|-----------:|-----------:|-----------:|------:|----------:|
-| Inserts_WithoutCompression |   922.7 ms | 64.31 ms | 186.6 ms |   916.8 ms | 36000.0000 |          - |     - | 143.19 MB |
-|   Reads_WithoutCompression | 1,278.9 ms | 44.34 ms | 129.3 ms | 1,321.0 ms | 39000.0000 | 13000.0000 |     - | 156.53 MB |
+Results:
+
+|                     Method |       Mean |    Error |   StdDev |      Gen 0 |      Gen 1 | Gen 2 | Allocated |
+|--------------------------- |-----------:|---------:|---------:|-----------:|-----------:|------:|----------:|
+| Inserts_WithoutCompression |   552.1 ms | 15.86 ms | 46.77 ms | 25000.0000 |          - |     - |  98.57 MB |
+|   Reads_WithoutCompression | 1,304.2 ms | 29.59 ms | 85.85 ms | 40000.0000 | 13000.0000 |     - | 156.72 MB |
 
 ``` ini
 
@@ -461,37 +457,39 @@ Intel Core i7-7700 CPU 3.60GHz (Kaby Lake), 1 CPU, 8 logical and 4 physical core
 Samsung NVMe M.2 SSD 960 EVO 250GB
 .NET Core SDK=5.0.200
   [Host]     : .NET Core 5.0.3 (CoreCLR 5.0.321.7212, CoreFX 5.0.321.7212), X64 RyuJIT
-  Job-PXJGEV : .NET Core 5.0.3 (CoreCLR 5.0.321.7212, CoreFX 5.0.321.7212), X64 RyuJIT
+  Job-XFZMWA : .NET Core 5.0.3 (CoreCLR 5.0.321.7212, CoreFX 5.0.321.7212), X64 RyuJIT
 
 InvocationCount=1  UnrollFactor=1  
 
 ```
 
 #### Cursory analysis
-Insert performance is extraordinary, beating disk-based alternatives by an order of magnitude or more in our internal benchmarks.  
+Insert performance is extraordinary. Per-second insertion rate beats disk-based alternatives by an order of magnitude or more in our internal benchmarks.  
 
-Read performance is good - on-par with the fastest disk-based alternatives. One thing to note on reads is that unlike alternatives,
-Faster does not lock while writing. If we do a mix of reads and writes, `MixedStorageKeyValueStore` reads could outperform
-alternatives.
+Read performance is good - close to the fastest disk-based alternatives. One thing to note is that unlike alternatives,
+Faster does not lock while writing. If we mix reads and writes, `MixedStorageKeyValueStore` reads could outperform alternatives.
 
 More benchmarks are required for memory-based situations and different key/value types. Benchmarks for alternatives should be added as well.
 
-### Improvements
-TODO Low hanging fruit
+### Future Performance Improvements
+Performance of the current `MixedStorageKeyValueStore` implementation exceeds our requirements. That said, we're open to pull-requests improving performance.
+Several low-hanging fruit to consider:
 
-- don't serialize blittable types
-- read only cache
+- Support [Faster's read only cache](https://microsoft.github.io/FASTER/docs/fasterkv-tuning/#configuring-the-read-cache). This cache is an in-memory 
+  cache of recently read records. Depending on read-patterns, this could reduce average read latency significantly.
+
+- Fast-path for blittable types: [Blittable types](https://docs.microsoft.com/en-us/dotnet/framework/interop/blittable-and-non-blittable-types) are fixed-length value-types.
+  Instances of these types can be converted to their binary forms without going through MessagePack C#. Also they are fixed-length and so do not need `SpanByte` wrappers. 
+  We ran internal benchmarks for a `MixedStorageKeyValueStore<int, string>` store with a fast path for its `int` (a blittable type) keys.
+  Read performance improved by ~20%. 
+
+- Use object log for mostly-in-memory situations. 
 
 ## Building and Testing
 You can build and test this project in Visual Studio 2019.
 
-## Features
-TODO
-- Sessions
-- Support for variable length types using `SpanByte` and MessagePack for binary serialization
-- Periodic log compaction
-
 ## Alternatives
+Apart from plain Faster, consider the following alternatives:
 <!-- TODO pros/cons -->
 
 - [ManagedEsent `PersistentDictionary`](https://github.com/microsoft/ManagedEsent/blob/master/Documentation/PersistentDictionaryDocumentation.md)
@@ -504,17 +502,150 @@ TODO
 
 ## Related Concepts
 ### Faster Basics
-TODO overview
-- log
-- log compaction
-- object log and spanbyte
-- sessions and concurrency
+This section provides just enough information about Faster to use *this* library effectively. Refer to the 
+[official Faster documentation](https://microsoft.github.io/FASTER/docs/fasterkv-basics/) for complete information on Faster.  
+
+Faster is a key-value store library. `FasterKV` is the key-value store type Faster exposes. 
+A `FasterKV` instance is composed of an **index** and a **log**.  
+
+#### Index
+The index is a simple [hash table](https://en.wikipedia.org/wiki/Hash_table) that maps keys to locations in the log.
+
+#### Log
+You can think of the log as a list of key-value pairs (records). For example, say we insert 3 records with keys 0, 1, and 2 and value "dummyString1". We insert them in order
+of increasing key value. Our log will look like this:
+
+```
+// Head
+key: 0, value: "dummyString1"
+key: 1, value: "dummyString1"
+key: 2, value: "dummyString1"
+// Tail - records are added here
+```
+
+Mutiple records can have the same key. Say we update values to "dummyString2", our log will now look like this:
+
+```
+// Head
+key: 0, value: "dummyString1"
+key: 1, value: "dummyString1"
+key: 2, value: "dummyString1"
+// Index points to these - the most recent records for each key
+key: 0, value: "dummyString2"
+key: 1, value: "dummyString2"
+key: 2, value: "dummyString2"
+// Tail
+```
+
+**Log compaction** removes redundant records. After log compaction:
+
+```
+key: 0, value: "dummyString2"
+key: 1, value: "dummyString2"
+key: 2, value: "dummyString2"
+```
+
+By default, `MixedStorageKeyValueStore` performs periodic log compactions for you.  
+
+The log can span memory and disk. Say we configure the in-memory region to fit 3 records. If we have 6 records, 3 end up on disk:
+
+```
+// In-memory region
+key: 0, value: "dummyString2"
+key: 1, value: "dummyString2"
+key: 2, value: "dummyString2"
+// On-disk region
+key: 3, value: "dummyString2"
+key: 4, value: "dummyString2"
+key: 5, value: "dummyString2"
+```
+
+Records on disk are split into groups called **segments**. Each segment corresponds to a fixed-size file. Say we configure segments to fit 3 records.
+If we have 4 records, the on-disk region of our log will look like this:
+
+```
+// On-disk region
+// Segment 0, full
+key: 3, value: "dummyString2"
+key: 4, value: "dummyString2"
+key: 5, value: "dummyString2"
+// Segment 1, partially filled
+key: 6, value: "dummyString2"
+empty
+empty
+```
+
+`MixedStorageKeyValueStore` has Faster "pre-allocate" files to speeds up inserts. This means files are not created empty and left to grow gradually, 
+instead they are created at the segment size of our choosing and populated gradually.  
+
+The log is also subdivided into **pages**. Pages are a separate concept from segments - segments typically consist of multiple pages -
+pages are contiguous blocks of in-memory or on-disk storage. What are pages for? Records are moved around as pages. For example, when we add records, 
+they are held in memory and only written to the log after we've added enough to fill a page.
+
+Note: Both segments and pages affect Faster in ways that aren't relevant to the current `MixedStorageKeyValueStore` implementation. For example, 
+segment size affects truncation granularity, but `MixedStorageKeyValueStore` does not support truncation. Refer to the official Faster documentation
+to learn more about these concepts.
+
+#### Sessions
+Most interactions with a `FasterKV` instance are done through sessions. A session's members are not thread safe:
+
+```csharp
+// Create FasterKV instance with least possible configuration
+FasterKV<int, string> fasterKV = new(1L << 20, logSettings);
+
+// Create a session
+var session = fasterKV.For(simpleFunctions).NewSession<SimpleFunctions<int, string>>(); // simpleFunction is an instance of SimpleFunctions<int, string>
+
+// Perform operations
+session.Upsert(0, "dummyString"); // Not thread-safe, so you need to manage a pool of sessions for multi-threaded logic
+```
+
+`MixedStorageKeyValueStore` abstracts sessions away:  
+```csharp
+// Create MixedStorageKeyValueStore instance
+MixedStorageKeyValueStore<int, string> mixedStorageKeyValueStore = new();
+
+// Perform operations
+mixedStorageKeyValueStore.Upsert(); // Thread-safe
+```
+
+#### Serialization
+Faster differentiates between fixed-length types (primitives, structs with only primitive members etc),
+and variable-length types (objects like strings, custom classes etc).
+
+By default, `FasterKV` serializes variable-length types using [`DataContractSerializer`](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.serialization.datacontractserializer?view=net-5.0),
+a slow, space-inefficient XML serializer. It then writes serialized variable-length data to a secondary log, the "object log".
+Use of the object log significantly slows down both writes and reads.
+
+To avoid the object log, an alternative system was added around the `SpanByte` struct. 
+`SpanByte` can be thought of as a wrapper for "serialized variable-length data" + "integer specifying the data's length".
+If a `FasterKV` instance is instantiated with `Spanbyte` in place of variable length types, for example, `FasterKV<int, SpanByte>`
+instead of `FasterKV<int, DummyClass>`, *all data* is written to the primary log.  
+
+While this avoids the object log, it means you need to manually serialize variable-length types and instantiate `SpanByte`s around the resultant data.  
+
+`MixedStorageKeyValueStore` abstracts all that away: 
+```csharp
+var mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>();
+
+// Upsert updates or inserts records.
+//
+// Under-the-hood, MixedStorageKeyValueStore serializes dummyClassInstance using the MessagePack C# library, 
+// creates a `SpanByte` around the resultant data, and passes the `SpanByte` to the underlying FasterKV instance.
+mixedStorageKVStore.Upsert(0, dummyClassInstance); 
+```
+
+Note: The object log is not a great general solution, but it is faster if most of the log is in memory. This is because it allows for "in-place" updates within the 
+in-memory region of the log. Supporting object log for such situations is listed under [Future Performance Improvements](#future-performance-improvements).
 
 ## Contributing
 Contributions are welcome!
 
 ### Contributors
 - [JeremyTCD](https://github.com/JeremyTCD)
+
+Thanks to [badrishc](https://github.com/badrishc) for help getting started with Faster. Quite a bit of this library is based
+on his suggestions.
 
 ## About
 Follow [@JeringTech](https://twitter.com/JeringTech) for updates and more.

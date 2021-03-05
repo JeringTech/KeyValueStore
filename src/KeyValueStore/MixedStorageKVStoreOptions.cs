@@ -11,7 +11,7 @@ namespace Jering.KeyValueStore
     public class MixedStorageKVStoreOptions
     {
         /// <summary>
-        /// <para>The number of buckets in Faster's main index.</para>
+        /// <para>The number of buckets in Faster's index.</para>
         /// <para>Each bucket is 64 bits.</para>
         /// <para>This value is ignored if a <see cref="FasterKV{Key, Value}"/> instance is supplied to the <see cref="MixedStorageKVStore{TKey, TValue}"/> constructor.</para>
         /// <para>Defaults to 1048576 (64 MB index).</para>
@@ -36,7 +36,7 @@ namespace Jering.KeyValueStore
 
         /// <summary>
         /// <para>The size of a segment of the on-disk region of Faster's log.</para>
-        /// <para>What is a segment? The on-disk region of the log is stored across multiple files, each file is referred to as a segment.</para>
+        /// <para>What is a segment? Records on disk are split into groups called segments. Each segment corresponds to a file.</para>
         /// <para>For performance reasons, segments are "pre-allocated". This means they are not created empty and left to grow gradually, instead they are created at the size specified by this value and populated gradually.</para>
         /// <para>This value is ignored if a <see cref="FasterKV{Key, Value}"/> instance is supplied to the <see cref="MixedStorageKVStore{TKey, TValue}"/> constructor.</para>
         /// <para>Defaults to 28 (268 MB).</para>
@@ -91,7 +91,7 @@ namespace Jering.KeyValueStore
 
         /// <summary>
         /// <para>The options for serializing data using MessagePack C#.</para>
-        /// <para>MessagePack C# is an efficient binary serialization library. Refer to their <a href="https://github.com/neuecc/MessagePack-CSharp">documentation</a>
+        /// <para>MessagePack C# is an efficient binary serialization library. Refer to <a href="https://github.com/neuecc/MessagePack-CSharp">MessagePack C# documentation</a>
         /// for details.</para>
         /// <para>Defaults to <see cref="MessagePackSerializerOptions.Standard"/> with compression using <see cref="MessagePackCompression.Lz4BlockArray"/>.</para>
         /// </summary>

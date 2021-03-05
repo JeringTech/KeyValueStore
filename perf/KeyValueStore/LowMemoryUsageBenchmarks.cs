@@ -43,6 +43,7 @@ namespace Jering.KeyValueStore.Performance
             {
                 PageSizeBits = 12, // 4 KB
                 MemorySizeBits = 13, // 2 pages
+                TimeBetweenLogCompactionsMS = -1, // Disable log compactions
                 MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
             };
         }
@@ -73,6 +74,7 @@ namespace Jering.KeyValueStore.Performance
             {
                 PageSizeBits = 12, // 4 KB
                 MemorySizeBits = 13, // 2 pages
+                TimeBetweenLogCompactionsMS = -1, // Disable log compactions
                 MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
             };
             _mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>(_mixedStorageKVStoreOptions);
