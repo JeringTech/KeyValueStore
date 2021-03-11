@@ -1,8 +1,5 @@
 # WIP
-Development on this project is frozen due to Faster limitations on Linux:
-
-- Performance is poor on linux because [all reads and writes are sequential](https://github.com/microsoft/FASTER/issues/206)
-- Concurrent log compaction and reads/writes have a tendency to throw, likely for the same reason reads and writes were made sequential
+Development on this project is on hold due to this issue: https://github.com/microsoft/FASTER/issues/429
 
 # Jering.KeyValueStore
 [![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/Jering.KeyValueStore-CI?branchName=main)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=1?branchName=main)
