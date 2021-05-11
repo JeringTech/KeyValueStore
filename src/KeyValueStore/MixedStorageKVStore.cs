@@ -11,12 +11,18 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     // TODO
+    // - Update editor config to error on no cofigure await
+    // - Clear build warnings
+    // - Push, get tests to pass in azure pipelines
+    // - Publish
+    // - Clean up documentation
+    //   - Generate API documentation
     // - Fast paths for fixed size keys and values. We need an equivalent of FASTER.core.Utility.IsBlittableType to check 
     //   if a key/value type is blittable. If it is, we can either use a fast path or create a FasterKV instance with blittable key/value type.
     /// <summary>
     /// The default implementation of <see cref="IMixedStorageKVStore{TKey, TValue}"/>.
     /// </summary>
-    public class MixedStorageKVStore<TKey, TValue> : IMixedStorageKVStore<TKey, TValue>
+    public class MixedStorageKVStore<TKey, TValue> : IMixedStorageKVStore<TKey, TValue>, IDisposable
     {
         private static readonly MixedStorageKVStoreOptions _defaultMixedStorageKVStoreOptions = new();
 
@@ -26,7 +32,6 @@ namespace Jering.KeyValueStore
         private readonly FasterKV<SpanByte, SpanByte>.ClientSessionBuilder<SpanByte, SpanByteAndMemory, Empty> _clientSessionBuilder;
 
         // Sessions
-        private readonly ThreadLocal<ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>> _threadLocalSession;
         private readonly ConcurrentQueue<ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>> _sessionPool = new();
 
         // Log
@@ -39,7 +44,6 @@ namespace Jering.KeyValueStore
 
         // Serialization
         private readonly MessagePackSerializerOptions _messagePackSerializerOptions;
-        private readonly ThreadLocal<ArrayBufferWriter<byte>> _threadLocalArrayBufferWriter;
         private readonly ConcurrentQueue<ArrayBufferWriter<byte>> _arrayBufferWriterPool = new();
 
         // Logging
@@ -83,7 +87,6 @@ namespace Jering.KeyValueStore
 
             // Session
             _clientSessionBuilder = _fasterKV.For(_spanByteFunctions);
-            _threadLocalSession = new(CreateSession, true);
 
             // Log
             _logAccessor = _fasterKV.Log;
@@ -98,7 +101,6 @@ namespace Jering.KeyValueStore
 
             // Serialization
             _messagePackSerializerOptions = mixedStorageKVStoreOptions.MessagePackSerializerOptions;
-            _threadLocalArrayBufferWriter = new(() => new(), true);
 
             // Logging
             _logger = logger;
@@ -107,7 +109,7 @@ namespace Jering.KeyValueStore
         }
 
         /// <inheritdoc />
-        public void Upsert(TKey key, TValue obj)
+        public async Task UpsertAsync(TKey key, TValue obj)
         {
             if (_disposed)
             {
@@ -115,32 +117,45 @@ namespace Jering.KeyValueStore
             }
 
             // Session
-            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = _threadLocalSession.Value;
+            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = GetPooledSession();
 
             // Serialize
-            ArrayBufferWriter<byte> arrayBufferWriter = _threadLocalArrayBufferWriter.Value;
+            ArrayBufferWriter<byte> arrayBufferWriter = GetPooledArrayBufferWriter();  // If we use a ThreadLocal ArrayBufferWriter, we might call Clear on the wrong instance if the continuation is on a different thread
             MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
             int keyLength = arrayBufferWriter.WrittenCount;
             MessagePackSerializer.Serialize(arrayBufferWriter, obj, _messagePackSerializerOptions);
-            ReadOnlySpan<byte> span = arrayBufferWriter.WrittenSpan;
+            int valueLength = arrayBufferWriter.WrittenCount - keyLength;
+            ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
+
 
             // Upsert
-            unsafe
+            using (MemoryHandle memoryHandle = memory.Pin())
             {
-                fixed (byte* pointer = span)
+                SpanByte keySpanByte;
+                SpanByte objSpanByte;
+                unsafe
                 {
-                    var keySpanByte = SpanByte.FromFixedSpan(span[0..keyLength]);
-                    var objSpanByte = SpanByte.FromFixedSpan(span[keyLength..]);
-                    session.Upsert(ref keySpanByte, ref objSpanByte);
+                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, keyLength);
+                    objSpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer + keyLength, valueLength);
+                }
+
+                FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await session.UpsertAsync(keySpanByte, objSpanByte).ConfigureAwait(false);
+
+                while (result.Status == Status.PENDING)
+                {
+                    result = await result.CompleteAsync().ConfigureAwait(false);
                 }
             }
 
-            // Clear memory pool
+            // Clean up
             arrayBufferWriter.Clear();
+            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
+            _sessionPool.Enqueue(session);
         }
 
+        // TODO review how Faster's example code handle async deletes
         /// <inheritdoc />
-        public Status Delete(TKey key)
+        public async ValueTask<Status> DeleteAsync(TKey key)
         {
             if (_disposed)
             {
@@ -148,28 +163,39 @@ namespace Jering.KeyValueStore
             }
 
             // Session
-            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = _threadLocalSession.Value;
+            ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = GetPooledSession();
 
             // Serialize
-            ArrayBufferWriter<byte> arrayBufferWriter = _threadLocalArrayBufferWriter.Value;
+            ArrayBufferWriter<byte> arrayBufferWriter = GetPooledArrayBufferWriter();  // If we use a ThreadLocal ArrayBufferWriter, we might call Clear on the wrong instance if the continuation is on a different thread
             MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
-            ReadOnlySpan<byte> span = arrayBufferWriter.WrittenSpan;
+            ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
 
             // Delete
-            Status result;
-            unsafe
+            Status status;
+            using (MemoryHandle memoryHandle = memory.Pin())
             {
-                fixed (byte* pointer = span)
+                SpanByte keySpanByte;
+                unsafe
                 {
-                    var keySpanByte = SpanByte.FromFixedSpan(span);
-                    result = session.Delete(ref keySpanByte);
+                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, memory.Length);
                 }
+
+                FasterKV<SpanByte, SpanByte>.DeleteAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await session.DeleteAsync(ref keySpanByte).ConfigureAwait(false);
+
+                while (result.Status == Status.PENDING)
+                {
+                    result = await result.CompleteAsync().ConfigureAwait(false);
+                }
+
+                status = result.Status;
             }
 
-            // Clear memory pool
+            // Clean up
             arrayBufferWriter.Clear();
+            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
+            _sessionPool.Enqueue(session);
 
-            return result;
+            return status;
         }
 
         /// <inheritdoc />
@@ -223,7 +249,7 @@ namespace Jering.KeyValueStore
             {
                 try
                 {
-                    await Task.Delay(_timeBetweenLogCompactionsMS, cancellationToken);
+                    await Task.Delay(_timeBetweenLogCompactionsMS, cancellationToken).ConfigureAwait(false);
 
                     // (oldest entries here) BeginAddress <= HeadAddress (where the in-memory region begins) <= SafeReadOnlyAddress (entries between here and tail updated in-place) < TailAddress (entries added here)
                     long safeReadOnlyRegionByteSize = _logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress;
@@ -239,7 +265,9 @@ namespace Jering.KeyValueStore
 
                     // Compact
                     long compactUntilAddress = (long)(_logAccessor.BeginAddress + 0.2 * (_logAccessor.SafeReadOnlyAddress - _logAccessor.BeginAddress));
-                    _threadLocalSession.Value.Compact(compactUntilAddress, true);
+                    ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session = GetPooledSession();
+                    session.Compact(compactUntilAddress, true);
+                    _sessionPool.Enqueue(session);
                     _numConsecutiveLogCompactions++;
 
                     if (_logTrace)
@@ -350,15 +378,8 @@ namespace Jering.KeyValueStore
                         session.Dispose();
                     }
 
-                    foreach (ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>> session in _threadLocalSession.Values)
-                    {
-                        session.Dispose(); // Dispose synchronously completes all pending operations, so we should not get exceptions if we're in the middle of log compaction
-                    }
-
-                    _threadLocalSession.Dispose();
                     _fasterKV.Dispose(); // Only safe to call after disposing all sessions
                     _logDevice?.Dispose();
-                    _threadLocalArrayBufferWriter.Dispose();
                 }
 
                 _disposed = true;

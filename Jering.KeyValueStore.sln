@@ -24,7 +24,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jering.KeyValueStore.Tests"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jering.KeyValueStore.Performance", "perf\KeyValueStore\Jering.KeyValueStore.Performance.csproj", "{598002AB-E266-407F-9587-D14CE341C04B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jering.KeyValueStore.Generators", "generators\Jering.KeyValueStore.Generators\Jering.KeyValueStore.Generators.csproj", "{535363D5-529A-437B-9494-B5D5A20F9D50}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jering.KeyValueStore.Generators", "generators\Jering.KeyValueStore.Generators\Jering.KeyValueStore.Generators.csproj", "{78818480-0469-44C7-97A7-998710651DFD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -58,14 +58,14 @@ Global
 		{598002AB-E266-407F-9587-D14CE341C04B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{598002AB-E266-407F-9587-D14CE341C04B}.Release|x64.ActiveCfg = Release|Any CPU
 		{598002AB-E266-407F-9587-D14CE341C04B}.Release|x64.Build.0 = Release|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Debug|x64.Build.0 = Debug|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Release|Any CPU.Build.0 = Release|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Release|x64.ActiveCfg = Release|Any CPU
-		{535363D5-529A-437B-9494-B5D5A20F9D50}.Release|x64.Build.0 = Release|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Debug|x64.Build.0 = Debug|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Release|x64.ActiveCfg = Release|Any CPU
+		{78818480-0469-44C7-97A7-998710651DFD}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

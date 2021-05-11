@@ -33,12 +33,12 @@
       },
       "Microsoft.FASTER.Core": {
         "type": "Direct",
-        "requested": "[1.8.3, )",
-        "resolved": "1.8.3",
-        "contentHash": "LCSqgkfuWlPZJwgHRL6M+q/15p0ZbMV62zVFFXiRz3Nt7HUjd8JpQIBlvAqG2sLXjaLQxJbZQZwGKA3aDhsN4A==",
+        "requested": "[1.9.3, )",
+        "resolved": "1.9.3",
+        "contentHash": "u3y0M6manowuKCu4kdfkzHcrQJQmUmseglZ/3rahQY9PA9Ef+VC9X3yIlb2D01msgqGE8kbj8kepwyUDIurNDg==",
         "dependencies": {
-          "System.Interactive.Async": "4.1.1",
-          "System.Runtime.CompilerServices.Unsafe": "4.7.1"
+          "System.Interactive.Async": "5.0.0",
+          "System.Runtime.CompilerServices.Unsafe": "5.0.0"
         }
       },
       "MessagePack.Annotations": {
@@ -142,16 +142,16 @@
       },
       "System.Interactive.Async": {
         "type": "Transitive",
-        "resolved": "4.1.1",
-        "contentHash": "oxXHl45NI2WzeAEzIhf8EtcHRjI7Pj8LpvFlegNXLab73dC6Ssd8SSOpw8cxjghWZhU8PM5b7AIZVE9E3DsJPA==",
+        "resolved": "5.0.0",
+        "contentHash": "QaqhQVDiULcu4vm6o89+iP329HcK44cETHOYgy/jfEjtzeFy0ZxmuM7nel9ocjnKxEM4yh1mli7hgh8Q9o+/Iw==",
         "dependencies": {
-          "System.Linq.Async": "4.1.1"
+          "System.Linq.Async": "5.0.0"
         }
       },
       "System.Linq.Async": {
         "type": "Transitive",
-        "resolved": "4.1.1",
-        "contentHash": "+MYrr8Jz8ayKhOJrqh+9EH4y2qcKYUehxKXE3j4IG5to4FlXz6HF0CgBUtYqrcbW5uOaCEUoZ+SVnp4dEIAi6Q=="
+        "resolved": "5.0.0",
+        "contentHash": "cPtIuuH8TIjVHSi2ewwReWGW1PfChPE0LxPIDlfwVcLuTM9GANFTXiMB7k3aC4sk3f0cQU25LNKzx+jZMxijqw=="
       },
       "System.Memory": {
         "type": "Transitive",

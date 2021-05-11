@@ -19,104 +19,104 @@ namespace Jering.KeyValueStore.Performance
     [MemoryDiagnoser]
     public class LowMemoryUsageBenchmarks
     {
-#pragma warning disable CS8618
-        private IMixedStorageKVStore<int, DummyClass> _mixedStorageKVStore;
-        private MixedStorageKVStoreOptions _mixedStorageKVStoreOptions;
-#pragma warning restore CS8618
-        private const int NUM_INSERT_OPERATIONS = 350_000;
-        private const int NUM_READ_OPERATIONS = 75_000;
-        private readonly ConcurrentQueue<ValueTask<(Status, DummyClass?)>> _readTasks = new();
-        private readonly DummyClass _dummyClassInstance = new()
-        {
-            // Populate with dummy values
-            DummyString = "dummyString",
-            DummyStringArray = new[] { "dummyString1", "dummyString2", "dummyString3", "dummyString4", "dummyString5" },
-            DummyInt = 10,
-            DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
-        };
+//#pragma warning disable CS8618
+//        private MixedStorageKVStore<int, DummyClass> _mixedStorageKVStore;
+//        private MixedStorageKVStoreOptions _mixedStorageKVStoreOptions;
+//#pragma warning restore CS8618
+//        private const int NUM_INSERT_OPERATIONS = 350_000;
+//        private const int NUM_READ_OPERATIONS = 75_000;
+//        private readonly ConcurrentQueue<ValueTask<(Status, DummyClass?)>> _readTasks = new();
+//        private readonly DummyClass _dummyClassInstance = new()
+//        {
+//            // Populate with dummy values
+//            DummyString = "dummyString",
+//            DummyStringArray = new[] { "dummyString1", "dummyString2", "dummyString3", "dummyString4", "dummyString5" },
+//            DummyInt = 10,
+//            DummyIntArray = new[] { 10, 100, 1000, 10000, 100000, 1000000, 10000000 }
+//        };
 
-        // Concurrent inserts without compression
-        [GlobalSetup(Target = nameof(Inserts_WithoutCompression))]
-        public void Inserts_WithoutCompression_GlobalSetup()
-        {
-            _mixedStorageKVStoreOptions = new()
-            {
-                PageSizeBits = 12, // 4 KB
-                MemorySizeBits = 13, // 2 pages
-                TimeBetweenLogCompactionsMS = -1, // Disable log compactions
-                MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
-            };
-        }
+//        // Concurrent inserts without compression
+//        [GlobalSetup(Target = nameof(Inserts_WithoutCompression))]
+//        public void Inserts_WithoutCompression_GlobalSetup()
+//        {
+//            _mixedStorageKVStoreOptions = new()
+//            {
+//                PageSizeBits = 12, // 4 KB
+//                MemorySizeBits = 13, // 2 pages
+//                TimeBetweenLogCompactionsMS = -1, // Disable log compactions
+//                MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
+//            };
+//        }
 
-        [IterationSetup(Target = nameof(Inserts_WithoutCompression))]
-        public void Inserts_WithoutCompression_IterationSetup()
-        {
-            _mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>(_mixedStorageKVStoreOptions);
-        }
+//        [IterationSetup(Target = nameof(Inserts_WithoutCompression))]
+//        public void Inserts_WithoutCompression_IterationSetup()
+//        {
+//            _mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>(_mixedStorageKVStoreOptions);
+//        }
 
-        [Benchmark]
-        public void Inserts_WithoutCompression()
-        {
-            Parallel.For(0, NUM_INSERT_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyClassInstance));
-        }
+//        [Benchmark]
+//        public void Inserts_WithoutCompression()
+//        {
+//            Parallel.For(0, NUM_INSERT_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyClassInstance));
+//        }
 
-        [IterationCleanup(Target = nameof(Inserts_WithoutCompression))]
-        public void Inserts_WithoutCompression_IterationCleanup()
-        {
-            _mixedStorageKVStore.Dispose();
-        }
+//        [IterationCleanup(Target = nameof(Inserts_WithoutCompression))]
+//        public void Inserts_WithoutCompression_IterationCleanup()
+//        {
+//            _mixedStorageKVStore.Dispose();
+//        }
 
-        // Concurrent reads without compression
-        [GlobalSetup(Target = nameof(Reads_WithoutCompression))]
-        public void Reads_WithoutCompression_GlobalSetup()
-        {
-            _mixedStorageKVStoreOptions = new()
-            {
-                PageSizeBits = 12, // 4 KB
-                MemorySizeBits = 13, // 2 pages
-                TimeBetweenLogCompactionsMS = -1, // Disable log compactions
-                MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
-            };
-            _mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>(_mixedStorageKVStoreOptions);
-            Parallel.For(0, NUM_READ_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyClassInstance));
-        }
+//        // Concurrent reads without compression
+//        [GlobalSetup(Target = nameof(Reads_WithoutCompression))]
+//        public void Reads_WithoutCompression_GlobalSetup()
+//        {
+//            _mixedStorageKVStoreOptions = new()
+//            {
+//                PageSizeBits = 12, // 4 KB
+//                MemorySizeBits = 13, // 2 pages
+//                TimeBetweenLogCompactionsMS = -1, // Disable log compactions
+//                MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
+//            };
+//            _mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>(_mixedStorageKVStoreOptions);
+//            Parallel.For(0, NUM_READ_OPERATIONS, key => _mixedStorageKVStore.Upsert(key, _dummyClassInstance));
+//        }
 
-        [IterationSetup(Target = nameof(Reads_WithoutCompression))]
-        public void Reads_WithoutCompression_IterationSetup()
-        {
-            _readTasks.Clear();
-        }
+//        [IterationSetup(Target = nameof(Reads_WithoutCompression))]
+//        public void Reads_WithoutCompression_IterationSetup()
+//        {
+//            _readTasks.Clear();
+//        }
 
-        [Benchmark]
-        public async Task Reads_WithoutCompression()
-        {
-            Parallel.For(0, NUM_READ_OPERATIONS, key => _readTasks.Enqueue(_mixedStorageKVStore.ReadAsync(key)));
-            foreach(ValueTask<(Status, DummyClass?)> task in _readTasks)
-            {
-                await task.ConfigureAwait(false);
-            }
-        }
+//        [Benchmark]
+//        public async Task Reads_WithoutCompression()
+//        {
+//            Parallel.For(0, NUM_READ_OPERATIONS, key => _readTasks.Enqueue(_mixedStorageKVStore.ReadAsync(key)));
+//            foreach(ValueTask<(Status, DummyClass?)> task in _readTasks)
+//            {
+//                await task.ConfigureAwait(false);
+//            }
+//        }
 
-        [GlobalCleanup(Target = nameof(Reads_WithoutCompression))]
-        public void Reads_WithoutCompression_GlobalCleanup()
-        {
-            _mixedStorageKVStore.Dispose();
-        }
+//        [GlobalCleanup(Target = nameof(Reads_WithoutCompression))]
+//        public void Reads_WithoutCompression_GlobalCleanup()
+//        {
+//            _mixedStorageKVStore.Dispose();
+//        }
 
-        [MessagePackObject]
-        public class DummyClass
-        {
-            [Key(0)]
-            public string? DummyString { get; set; }
+//        [MessagePackObject]
+//        public class DummyClass
+//        {
+//            [Key(0)]
+//            public string? DummyString { get; set; }
 
-            [Key(1)]
-            public string[]? DummyStringArray { get; set; }
+//            [Key(1)]
+//            public string[]? DummyStringArray { get; set; }
 
-            [Key(2)]
-            public int DummyInt { get; set; }
+//            [Key(2)]
+//            public int DummyInt { get; set; }
 
-            [Key(3)]
-            public int[]? DummyIntArray { get; set; }
-        }
+//            [Key(3)]
+//            public int[]? DummyIntArray { get; set; }
+//        }
     }
 }
