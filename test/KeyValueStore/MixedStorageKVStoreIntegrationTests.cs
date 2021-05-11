@@ -507,7 +507,7 @@ namespace Jering.KeyValueStore.Tests
             }
 
             // Assert
-            Assert.StartsWith(expectedResultStart, resultStringBuilder.ToString().Replace("\r\n", "\n"));
+            Assert.StartsWith(expectedResultStart.Replace("\r\n", "\n"), resultStringBuilder.ToString().Replace("\r\n", "\n"));
         }
 
         #region Helpers
