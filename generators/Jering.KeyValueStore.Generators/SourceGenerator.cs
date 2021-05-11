@@ -7,6 +7,7 @@ namespace Jering.KeyValueStore.Generators
 {
     public abstract class SourceGenerator : ISourceGenerator
     {
+
         protected static readonly DiagnosticDescriptor _unexpectedException = new("G0006",
             "UnexpectedException",
             "UnexpectedException: {0}",

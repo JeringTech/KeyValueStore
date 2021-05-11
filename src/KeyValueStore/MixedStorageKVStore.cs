@@ -11,8 +11,6 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     // TODO
-    // - Update editor config to error on no cofigure await
-    // - Clear build warnings
     // - Push, get tests to pass in azure pipelines
     // - Publish
     // - Clean up documentation
@@ -126,7 +124,6 @@ namespace Jering.KeyValueStore
             MessagePackSerializer.Serialize(arrayBufferWriter, obj, _messagePackSerializerOptions);
             int valueLength = arrayBufferWriter.WrittenCount - keyLength;
             ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
-
 
             // Upsert
             using (MemoryHandle memoryHandle = memory.Pin())

@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Text;
 
 namespace Jering.KeyValueStore.Tests
@@ -19,6 +20,7 @@ namespace Jering.KeyValueStore.Tests
 
         public void Dispose()
         {
+            GC.SuppressFinalize(this);
         }
     }
 }

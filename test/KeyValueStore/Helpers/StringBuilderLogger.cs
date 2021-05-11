@@ -6,7 +6,7 @@ namespace Jering.KeyValueStore.Tests
 { 
     public class StringBuilderLogger : ILogger
     {
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
         private readonly StringBuilder _stringBuilder;
 
         public StringBuilderLogger(StringBuilder stringBuilder)
@@ -14,7 +14,7 @@ namespace Jering.KeyValueStore.Tests
             _stringBuilder = stringBuilder;
         }
 
-        public IDisposable BeginScope<TState>(TState state)
+        public IDisposable? BeginScope<TState>(TState state)
         {
             return null;
         }

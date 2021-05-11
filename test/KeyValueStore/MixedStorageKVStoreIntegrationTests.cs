@@ -15,6 +15,7 @@ using Xunit;
 
 namespace Jering.KeyValueStore.Tests
 {
+ #pragma warning disable CA2012 // Can't await in Parallel.For actions
     /// <summary>
     /// Verifies behaviour of <see cref="IMixedStorageKVStore{TKey, TValue}"/> implementations and their underlying <see cref="FasterKV{TKey, TValue}"/> instances. They:
     /// <list type="bullet">
@@ -532,7 +533,7 @@ namespace Jering.KeyValueStore.Tests
                     }
                 }
             });
-            foreach (var task in upsertTasks)
+            foreach (ValueTask<FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty>> task in upsertTasks)
             {
                 FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await task.ConfigureAwait(false);
 
@@ -601,6 +602,16 @@ namespace Jering.KeyValueStore.Tests
             {
                 return HashCode.Combine(DummyByte, DummyShort, DummyInt, DummyLong);
             }
+
+            public static bool operator ==(DummyFixedLengthStruct left, DummyFixedLengthStruct right)
+            {
+                return left.Equals(right);
+            }
+
+            public static bool operator !=(DummyFixedLengthStruct left, DummyFixedLengthStruct right)
+            {
+                return !(left == right);
+            }
         }
 
         [MessagePackObject]
@@ -636,6 +647,16 @@ namespace Jering.KeyValueStore.Tests
             public override int GetHashCode()
             {
                 return HashCode.Combine(DummyString, DummyStringArray, DummyInt, DummyIntArray);
+            }
+
+            public static bool operator ==(DummyVariableLengthStruct left, DummyVariableLengthStruct right)
+            {
+                return left.Equals(right);
+            }
+
+            public static bool operator !=(DummyVariableLengthStruct left, DummyVariableLengthStruct right)
+            {
+                return !(left == right);
             }
         }
 
