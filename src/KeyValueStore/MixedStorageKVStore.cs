@@ -11,10 +11,9 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     // TODO
-    // - Push, get tests to pass in azure pipelines
-    // - Publish
     // - Clean up documentation
     //   - Generate API documentation
+    // - Publish
     // - Fast paths for fixed size keys and values. We need an equivalent of FASTER.core.Utility.IsBlittableType to check 
     //   if a key/value type is blittable. If it is, we can either use a fast path or create a FasterKV instance with blittable key/value type.
     /// <summary>
@@ -123,17 +122,17 @@ namespace Jering.KeyValueStore
             int keyLength = arrayBufferWriter.WrittenCount;
             MessagePackSerializer.Serialize(arrayBufferWriter, obj, _messagePackSerializerOptions);
             int valueLength = arrayBufferWriter.WrittenCount - keyLength;
-            ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
 
             // Upsert
-            using (MemoryHandle memoryHandle = memory.Pin())
+            using (MemoryHandle memoryHandle = arrayBufferWriter.WrittenMemory.Pin())
             {
                 SpanByte keySpanByte;
                 SpanByte objSpanByte;
                 unsafe
                 {
-                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, keyLength);
-                    objSpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer + keyLength, valueLength);
+                    byte* pointer = (byte*)memoryHandle.Pointer;
+                    keySpanByte = SpanByte.FromPointer(pointer, keyLength);
+                    objSpanByte = SpanByte.FromPointer(pointer + keyLength, valueLength);
                 }
 
                 FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await session.UpsertAsync(keySpanByte, objSpanByte).ConfigureAwait(false);
@@ -150,7 +149,6 @@ namespace Jering.KeyValueStore
             _sessionPool.Enqueue(session);
         }
 
-        // TODO review how Faster's example code handle async deletes
         /// <inheritdoc />
         public async ValueTask<Status> DeleteAsync(TKey key)
         {
@@ -165,16 +163,16 @@ namespace Jering.KeyValueStore
             // Serialize
             ArrayBufferWriter<byte> arrayBufferWriter = GetPooledArrayBufferWriter();  // If we use a ThreadLocal ArrayBufferWriter, we might call Clear on the wrong instance if the continuation is on a different thread
             MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
-            ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
+            int keyLength = arrayBufferWriter.WrittenCount;
 
             // Delete
             Status status;
-            using (MemoryHandle memoryHandle = memory.Pin())
+            using (MemoryHandle memoryHandle = arrayBufferWriter.WrittenMemory.Pin())
             {
                 SpanByte keySpanByte;
                 unsafe
                 {
-                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, memory.Length);
+                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, keyLength);
                 }
 
                 FasterKV<SpanByte, SpanByte>.DeleteAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await session.DeleteAsync(ref keySpanByte).ConfigureAwait(false);
@@ -209,17 +207,17 @@ namespace Jering.KeyValueStore
             // Serialize
             ArrayBufferWriter<byte> arrayBufferWriter = GetPooledArrayBufferWriter();  // If we use a ThreadLocal ArrayBufferWriter, we might call Clear on the wrong instance if the continuation is on a different thread
             MessagePackSerializer.Serialize(arrayBufferWriter, key, _messagePackSerializerOptions);
-            ReadOnlyMemory<byte> memory = arrayBufferWriter.WrittenMemory;
+            int keyLength = arrayBufferWriter.WrittenCount;
 
             // Read
             Status status;
             SpanByteAndMemory spanByteAndMemory;
-            using (MemoryHandle memoryHandle = memory.Pin())
+            using (MemoryHandle memoryHandle = arrayBufferWriter.WrittenMemory.Pin())
             {
                 SpanByte keySpanByte;
                 unsafe
                 {
-                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, memory.Length);
+                    keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, keyLength);
                 }
 
                 (status, spanByteAndMemory) = (await session.ReadAsync(ref keySpanByte).ConfigureAwait(false)).Complete();
@@ -238,9 +236,7 @@ namespace Jering.KeyValueStore
 
         private async Task LogCompactionLoop()
         {
-#pragma warning disable CS8602 // If compaction loop is running, cts is not null (see constructor)
-            CancellationToken cancellationToken = _logCompactionCancellationTokenSource.Token;
-#pragma warning restore CS8602
+            CancellationToken cancellationToken = _logCompactionCancellationTokenSource!.Token; // If compaction loop is running, cts is not null (see constructor)
 
             while (!_disposed && !_logCompactionCancellationTokenSource.IsCancellationRequested)
             {
