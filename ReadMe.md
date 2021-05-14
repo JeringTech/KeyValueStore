@@ -1,9 +1,6 @@
-# WIP
-Development on this project is on hold due to this issue: https://github.com/microsoft/FASTER/issues/429
-
 # Jering.KeyValueStore
-[![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/Jering.KeyValueStore-CI?branchName=main)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=1?branchName=main)
-[![codecov](https://codecov.io/gh/JeringTech/KeyValueStore/branch/main/graph/badge.svg)](https://codecov.io/gh/JeringTech/KeyValueStore)
+[![Build Status](https://dev.azure.com/JeringTech/KeyValueStore/_apis/build/status/JeringTech.KeyValueStore?repoName=JeringTech%2FKeyValueStore&branchName=refs%2Fpull%2F2%2Fmerge)](https://dev.azure.com/JeringTech/KeyValueStore/_build/latest?definitionId=11&repoName=JeringTech%2FKeyValueStore&branchName=refs%2Fpull%2F2%2Fmerge)
+[![codecov](https://codecov.io/gh/JeringTech/KeyValueStore/branch/main/graph/badge.svg?token=5STAAJJ4Q4)](https://codecov.io/gh/JeringTech/KeyValueStore)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/JeringTech/KeyValueStore/blob/main/License.md)
 [![NuGet](https://img.shields.io/nuget/vpre/Jering.KeyValueStore.svg?label=nuget)](https://www.nuget.org/packages/Jering.KeyValueStore/)
 

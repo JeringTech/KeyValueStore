@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     // TODO
-    // - Publish
     // - Fast paths for fixed size keys and values. We need an equivalent of FASTER.core.Utility.IsBlittableType to check 
     //   if a key/value type is blittable. If it is, we can either use a fast path or create a FasterKV instance with blittable key/value type.
     /// <summary>
