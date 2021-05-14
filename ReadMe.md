@@ -283,23 +283,135 @@ var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
 ```
 
-The following table lists all options.
+The following section lists all options.
 
-#### MixedStorageKVStoreOptions
-<!-- MixedStorageKVStoreOptions -->
-| Option | Type | Description | Default |  
-| ------ | ---- | ----------- | ------- |
-| IndexNumBuckets | `long` | The number of buckets in Faster's index. Each bucket is 64 bits. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 1048576 (64 MB index) |
-| PageSizeBits | `int` | The size of a page in Faster's log. A page is a contiguous block of in-memory or on-disk storage. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 25 (2^25 = 33.5 MB) |
-| MemorySizeBits | `int` | The size of the in-memory region of Faster's log. If the log outgrows this region, overflow is moved to its on-disk region. Memory size must be at least two pages large. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 26 (2^26 = 67 MB) |
-| SegmentSizeBits | `int` | The size of a segment of the on-disk region of Faster's log. What is a segment? What is a segment? Records on disk are split into groups called segments. Each segment corresponds to a file. For performance reasons, segments are "pre-allocated". This means they are not created empty and left to grow gradually, instead they are created at the size specified by this value and populated gradually. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | 28 (268 MB)  |
-| LogDirectory | `string` | The directory containing the on-disk region of Faster's log. If this value is `null`, whitespace or an empty string, log files are placed in "&lt;temporary path&gt;/FasterLogs" where "&lt;temporary path&gt;" is the value returned by `Path.GetTempPath`. Note that nothing is written to disk while your log fits in-memory. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `null`  |
-| LogFileNamePrefix | `string` | The Faster-log filename prefix. The on-disk region of the log is stored across multiple files. Each file is referred to as a segment. Each segment has file name "&lt;log file name prefix&gt;.log.&lt;segment number&gt;". If this value is `null`, whitespace or an empty string, a random `Guid` is used as the prefix. This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `null`  |
-| TimeBetweenLogCompactionsMS | `int` | The time between Faster-log compaction attempts. If this value is negative, log compaction is disabled. | `60000`  |
-| InitialLogCompactionThresholdBytes | `long` | The initial log compaction threshold. Initially, log compactions only run when the Faster-log's safe-readonly region's size is larger than or equal to this value. If log compactions run 5 times in a row, this value is doubled. Why? Consider the situation where the safe-readonly region is already compact, but still larger than the threshold. Not increasing the threshold would result in continual redundant compaction runs. If this value is less than or equal to 0, the initial log compaction threshold is 2 * memory size (`MemorySizeBits`). | `0`  |
-| DeleteLogOnClose | `bool` | The value specifying whether Faster-log files are deleted when the `MixedStorageKVStore` is disposed or finalized (at which points underlying Faster-log files are closed). This value is ignored if a `FasterKV` instance is supplied to the `MixedStorageKVStore` constructor. | `true` |
-| MessagePackSerializerOptions | `MessagePackSerializerOptions` | The options for serializing data using MessagePack C#. MessagePack C# is an efficient binary serialization library. Refer to [MessagePack C# documentation](https://github.com/neuecc/MessagePack-CSharp) for details. | [Standard options with Lz4BlockArray compression](https://github.com/neuecc/MessagePack-CSharp#lz4-compression) |
-<!-- MixedStorageKVStoreOptions -->
+<!-- MixedStorageKVStoreOptions generated docs -->
+
+### MixedStorageKVStoreOptions Class
+#### Constructors
+##### MixedStorageKVStoreOptions()
+```csharp
+public MixedStorageKVStoreOptions()
+```
+#### Properties
+##### MixedStorageKVStoreOptions.IndexNumBuckets
+The number of buckets in Faster's index.
+```csharp
+public long IndexNumBuckets { get; set; }
+```
+###### Remarks
+Each bucket is 64 bits.  
+
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to 1048576 (64 MB index).
+##### MixedStorageKVStoreOptions.PageSizeBits
+The size of a page in Faster's log.
+```csharp
+public int PageSizeBits { get; set; }
+```
+###### Remarks
+A page is a contiguous block of in-memory or on-disk storage.  
+
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to 25 (2^25 = 33.5 MB).
+##### MixedStorageKVStoreOptions.MemorySizeBits
+The size of the in-memory region of Faster's log.
+```csharp
+public int MemorySizeBits { get; set; }
+```
+###### Remarks
+If the log outgrows this region, overflow is moved to its on-disk region.  
+
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to 26 (2^26 = 67 MB).
+##### MixedStorageKVStoreOptions.SegmentSizeBits
+The size of a segment of the on-disk region of Faster's log.
+```csharp
+public int SegmentSizeBits { get; set; }
+```
+###### Remarks
+What is a segment? Records on disk are split into groups called segments. Each segment corresponds to a file.  
+
+For performance reasons, segments are "pre-allocated". This means they are not created empty and left to grow gradually, instead they are created at the size specified by this value and populated gradually.  
+
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to 28 (268 MB).
+##### MixedStorageKVStoreOptions.LogDirectory
+The directory containing the on-disk region of Faster's log.
+```csharp
+public string? LogDirectory { get; set; }
+```
+###### Remarks
+If this value is `null` or an empty string, log files are placed in "&lt;temporary path&gt;/FasterLogs" where 
+"&lt;temporary path&gt;" is the value returned by `Path.GetTempPath`.  
+
+Note that nothing is written to disk while your log fits in-memory.  
+
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to `null`.
+##### MixedStorageKVStoreOptions.LogFileNamePrefix
+The Faster log filename prefix.
+```csharp
+public string? LogFileNamePrefix { get; set; }
+```
+###### Remarks
+The on-disk region of the log is stored across multiple files. Each file is referred to as a segment.
+Each segment has file name "&lt;log file name prefix&gt;.log.&lt;segment number&gt;".
+  
+
+If this value is `null` or an empty string, a random `Guid` is used as the prefix.  
+
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to `null`.
+##### MixedStorageKVStoreOptions.TimeBetweenLogCompactionsMS
+The time between Faster log compaction attempts.
+```csharp
+public int TimeBetweenLogCompactionsMS { get; set; }
+```
+###### Remarks
+If this value is negative, log compaction is disabled.  
+
+Defaults to 60000.
+##### MixedStorageKVStoreOptions.InitialLogCompactionThresholdBytes
+The initial log compaction threshold.
+```csharp
+public long InitialLogCompactionThresholdBytes { get; internal set; }
+```
+###### Remarks
+Initially, log compactions only run when the Faster log's safe-readonly region's size is larger than or equal to this value.  
+
+If log compaction runs 5 times in a row, this value is doubled. Why? Consider the situation where the safe-readonly region is already 
+compact, but still larger than the threshold. Not increasing the threshold would result in redundant compaction runs.  
+
+If this value is less than or equal to 0, the initial log compaction threshold is 2 * memory size in bytes (`MixedStorageKVStoreOptions.MemorySizeBits`).  
+
+Defaults to 0.
+##### MixedStorageKVStoreOptions.DeleteLogOnClose
+The value specifying whether log files are deleted when the `MixedStorageKVStore<TKey, TValue>` is disposed or finalized (at which points underlying log files are closed).
+```csharp
+public bool DeleteLogOnClose { get; set; }
+```
+###### Remarks
+This value is ignored if a `FasterKV<Key, Value>` instance is supplied to the `MixedStorageKVStore<TKey, TValue>` constructor.  
+
+Defaults to `true`.
+##### MixedStorageKVStoreOptions.MessagePackSerializerOptions
+The options for serializing data using MessagePack C#.
+```csharp
+public MessagePackSerializerOptions MessagePackSerializerOptions { get; set; }
+```
+###### Remarks
+MessagePack C# is a performant binary serialization library. Refer to [MessagePack C# documentation](https://github.com/neuecc/MessagePack-CSharp)
+for details.  
+
+Defaults to `MessagePackSerializerOptions.Standard` with compression using `MessagePackCompression.Lz4BlockArray`.
+<!-- MixedStorageKVStoreOptions generated docs -->
 
 #### Advanced Configuration
 For more control over Faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore`:
@@ -374,88 +486,92 @@ the size of your data can grow boundlessly. Therefore, we recommend monitoring d
 using a cloud VM, consider setting an alerts for disk space.
 
 ## API
-<!-- MixedStorageKVStore -->
-### MixedStorageKVStore<TKey, TValue>
-#### Constructor
-##### Signature
-```csharp
-public MixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null,
-    ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null,
-    FasterKV<SpanByte, SpanByte>? fasterKVStore = null)
-```
-##### Description
+<!-- MixedStorageKVStore generated docs -->
+
+### MixedStorageKVStore<TKey, TValue> Class
+#### Constructors
+##### MixedStorageKVStore(MixedStorageKVStoreOptions, ILogger<MixedStorageKVStore<TKey, TValue>>, FasterKV<SpanByte, SpanByte>)
+
 Creates a `MixedStorageKVStore<TKey, TValue>`.
-##### Parameters
-- `mixedStorageKVStoreOptions`
-  - Type: `MixedStorageKVStoreOptions`
-  - Description: The options for the `MixedStorageKVStore<TKey, TValue>`.
-- `logger`
-  - Type: `ILogger<MixedStorageKVStore<TKey, TValue>>`
-  - Description: The logger for log compaction events.
-- `fasterKVStore`
-  - Type: `FasterKV<SpanByte, SpanByte>`
-  - Description: The underlying `FasterKV<SpanByte, SpanByte>` for the `MixedStorageKVStore<TKey, TValue>`. Specify this value if you want to manually configure it.
+```csharp
+public MixedStorageKVStore([MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null], [ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null], [FasterKV<SpanByte, SpanByte>? fasterKVStore = null])
+```
+###### Parameters
+mixedStorageKVStoreOptions `MixedStorageKVStoreOptions`  
+The options for the `MixedStorageKVStore<TKey, TValue>`.
 
+logger `ILogger<MixedStorageKVStore<TKey, TValue>>`  
+The logger for log compaction events.
+
+fasterKVStore `FasterKV<SpanByte, SpanByte>`  
+The underlying `FasterKV<Key, Value>` for the `MixedStorageKVStore<TKey, TValue>`.
+This parameter allows you to use a manually configured Faster instance.
 #### Properties
-##### `FasterKV`
-###### Signature
-```csharp
-FasterKV<SpanByte, SpanByte> FasterKV { get; }
-```
-###### Description
-Gets the underlying `FasterKV<SpanByte, SpanByte>` instance.
+##### MixedStorageKVStore<TKey, TValue>.FasterKV
 
+Gets the underlying `FasterKV<Key, Value>` instance.
+```csharp
+public FasterKV<SpanByte, SpanByte> FasterKV { get; }
+```
 #### Methods
-##### `Upsert`
-###### Signature
-```csharp
-void Upsert(TKey key, TValue obj);
-```
-###### Description
-Updates or inserts a record.
-###### Parameters
-- `key`
-  - Type: `TKey`
-  - Description: The key of the record.
-- `obj`
-  - Type: `TValue`
-  - Description: The new value of the record.
-###### Exceptions
-- `ObjectDisposedException`
-  - Thrown if the instance or a dependency is disposed.
+##### MixedStorageKVStore<TKey, TValue>.UpsertAsync(TKey, TValue)
 
-##### `Delete`
-###### Signature
+Updates or inserts a record asynchronously.
 ```csharp
-Status Delete(TKey key);
+public Task UpsertAsync(TKey key, TValue obj)
 ```
-###### Description
-Deletes a record.
 ###### Parameters
-- `key`
-  - Type: `TKey`
-  - Description: The key of the record to delete.
-######  Exceptions
-- `ObjectDisposedException`
-  - Thrown if the instance or a dependency is disposed.
+key `TKey`  
+The record's key.
 
-##### `ReadAsync`
-###### Signature
-```csharp
-ValueTask<(Status, TValue?)> ReadAsync(TKey key);
-```
-###### Description
-Reads a record asynchronously.
-###### Parameters
-- `key`
-  - Type: `TKey`
-  - Description: The key of the record to read.
+obj `TValue`  
+The record's new value.
 ###### Returns
 The task representing the asynchronous operation.
 ###### Exceptions
-- `ObjectDisposedException`
-  - Thrown if the instance or a dependency is disposed.
-<!-- MixedStorageKVStore -->
+`ObjectDisposedException`  
+Thrown if the instance or a dependency is disposed.
+###### Remarks
+This method is thread-safe.
+##### MixedStorageKVStore<TKey, TValue>.DeleteAsync(TKey)
+
+Deletes a record asynchronously.
+```csharp
+public ValueTask<Status> DeleteAsync(TKey key)
+```
+###### Parameters
+key `TKey`  
+The record's key.
+###### Returns
+The task representing the asynchronous operation.
+###### Exceptions
+`ObjectDisposedException`  
+Thrown if the instance or a dependency is disposed.
+###### Remarks
+This method is thread-safe.
+##### MixedStorageKVStore<TKey, TValue>.ReadAsync(TKey)
+
+Reads a record asynchronously.
+```csharp
+public ValueTask<(Status, TValue?)> ReadAsync(TKey key)
+```
+###### Parameters
+key `TKey`  
+The record's key.
+###### Returns
+The task representing the asynchronous operation.
+###### Exceptions
+`ObjectDisposedException`  
+Thrown if the instance or a dependency is disposed.
+###### Remarks
+This method is thread-safe.
+##### MixedStorageKVStore<TKey, TValue>.Dispose()
+
+Disposes this instance.
+```csharp
+public void Dispose()
+```
+<!-- MixedStorageKVStore generated docs -->
 
 ## Performance
 ### Benchmarks
