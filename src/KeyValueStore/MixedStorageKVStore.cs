@@ -11,8 +11,6 @@ using System.Threading.Tasks;
 namespace Jering.KeyValueStore
 {
     // TODO
-    // - Clean up documentation
-    //   - Generate API documentation
     // - Publish
     // - Fast paths for fixed size keys and values. We need an equivalent of FASTER.core.Utility.IsBlittableType to check 
     //   if a key/value type is blittable. If it is, we can either use a fast path or create a FasterKV instance with blittable key/value type.
@@ -60,9 +58,8 @@ namespace Jering.KeyValueStore
         /// </summary>
         /// <param name="mixedStorageKVStoreOptions">The options for the <see cref="MixedStorageKVStore{TKey, TValue}"/>.</param>
         /// <param name="logger">The logger for log compaction events.</param>
-        /// <param name="fasterKVStore">
-        /// <para>The underlying <see cref="FasterKV{TKey, TValue}"/> for the <see cref="MixedStorageKVStore{TKey, TValue}"/>.</para>
-        /// <para>Specify this value if you want to manually configure it.</para>
+        /// <param name="fasterKVStore">The underlying <see cref="FasterKV{TKey, TValue}"/> for the <see cref="MixedStorageKVStore{TKey, TValue}"/>.
+        /// This parameter allows you to use a manually configured Faster instance.
         /// </param>
         public MixedStorageKVStore(MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null,
             ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null,

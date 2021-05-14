@@ -19,26 +19,29 @@ namespace Jering.KeyValueStore
         /// <summary>
         /// Updates or inserts a record asynchronously.
         /// </summary>
-        /// <param name="key">The key of the record.</param>
-        /// <param name="obj">The new value of the record.</param>
+        /// <param name="key">The record's key.</param>
+        /// <param name="obj">The record's new value.</param>
         /// <returns>The task representing the asynchronous operation.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the instance or a dependency is disposed.</exception>
+        /// <remarks>This method is thread-safe.</remarks>
         Task UpsertAsync(TKey key, TValue obj);
 
         /// <summary>
         /// Deletes a record asynchronously.
         /// </summary>
-        /// <param name="key">The key of the record to delete.</param>
+        /// <param name="key">The record's key.</param>
         /// <returns>The task representing the asynchronous operation.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the instance or a dependency is disposed.</exception>
+        /// <remarks>This method is thread-safe.</remarks>
         ValueTask<Status> DeleteAsync(TKey key);
 
         /// <summary>
         /// Reads a record asynchronously.
         /// </summary>
-        /// <param name="key">The key of the record to read.</param>
+        /// <param name="key">The record's key.</param>
         /// <returns>The task representing the asynchronous operation.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the instance or a dependency is disposed.</exception>
+        /// <remarks>This method is thread-safe.</remarks>
         ValueTask<(Status, TValue?)> ReadAsync(TKey key);
     }
 }
