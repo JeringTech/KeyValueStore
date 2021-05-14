@@ -21,7 +21,7 @@
 ## Overview
 Jering.KeyValueStore enables you to store key-value data across memory and disk.
 
-Usage example:
+Usage:
 
 ```csharp
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(); // Stores data across memory (primary storage) and disk (secondary storage), hence "mixed storage"
@@ -51,21 +51,21 @@ Assert.Equal(Status.NOTFOUND, status);
 Assert.Null(result);
 ```
 
-This library is a wrapper of [Microsoft's Faster key-value store](https://github.com/microsoft/FASTER) (Faster). Faster introduces a performant, lock-free concurrency system. This document 
-requires a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) for a quick primer and an overview of features this library provides on top of Faster. 
+This library is a wrapper of Microsoft's [Faster key-value store](https://github.com/microsoft/FASTER). Faster is a low-level key-value store that introduces a novel, lock-free concurrency system. 
+To use this library, you'll need a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) for a quick primer and an overview of features this library provides on top of Faster. 
 
-Should I use this library over plain Faster? There are disadvantages to this library:
+You might be wondering whether to use this library or plain Faster. This library has disadvantage:
 
 - `MixedStorageKVStore`, isn't as optimized as a custom `FasterKV` instance could be
-- Also, at present, it only wraps a subset of Faster's features (see [`MixedStorageKVSgtore.FasterKV](#TODO) and [manual Faster configuration](#advanced-configuration))
+- At present, it only wraps a subset of Faster's features 
 
 That said, `MixedStorageKVStore`:
 
 - [Performs well](#performance) relative to non-Faster [alternatives](#alternatives)
 - Is [trivial to use](#usage)
-- Indirectly exposes most Faster features that it does not wrap
+- Indirectly exposes Faster features that it does not wrap (see [`MixedStorageKVStore.FasterKV](#mixedstoragekvstoretkey-tvalue-class) and [manual Faster configuration](#advanced-configuration))
 
-This library is decent for getting started with Faster. If/when performance bottlenecks in your applications surface, you can transition to custom `FasterKV` instances.
+This library is decent way to get started with Faster. If/when performance bottlenecks in your applications surface, you can transition to custom `FasterKV` instances.
 
 ## Target Frameworks
 - .NET Standard 2.1
@@ -87,8 +87,8 @@ Using .Net CLI:
 
 ## Usage
 ### Key and Value Types
-You can use any type [MessagePack C# serializes](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) as `MixedStorageKVStore` key and value types.
-Note that custom types must be annotated according to [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization).  
+You can use any type [MessagePack C# serializes](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) as a `MixedStorageKVStore` key or value type.
+Custom types must be annotated according to [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization).  
 
 Note: [MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) is a performant binary serialization library.
 
@@ -113,7 +113,7 @@ public class DummyClass
     public int[]? DummyIntArray { get; set; }
 }
 ```
-Here's a `MixedStorageKVStore` with `object` key and value types (in this example, `string` and `DummyClass` respectively):
+Here's a `MixedStorageKVStore` with `object` key and value types (in this example, `string` and `DummyClass`):
 ```csharp
 var mixedStorageKVStore = new MixedStorageKVStore<string, DummyClass>();
 var dummyClassInstance = new DummyClass()
@@ -155,7 +155,7 @@ public struct DummyStruct
     public long DummyLong { get; set; }
 }
 ```
-Here's a `MixedStorageKVStore` with value-type key and value types (in this example, `int` and `DummyStruct` respectively):
+Here's a `MixedStorageKVStore` with value-type key and value types (in this example, `int` and `DummyStruct`):
 ```csharp
 var mixedStorageKVStore = new MixedStorageKVStore<int, DummyStruct>();
 var dummyStructInstance = new DummyStruct()
@@ -269,18 +269,180 @@ foreach (ValueTask<(Status, string?)> task in readTasks)
 ```
 
 ### Configuring `MixedStorageKVStore`
-You can pass a `MixedStorageKVStoreOptions` instance to the `MixedStorageKVStore` constructor:
+To configure a `MixedStorageKVStore`, pass a `MixedStorageKVStoreOptions` instance to it on instantiation:
 
 ```csharp
 var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 {
     // Set options
+    LogDirectory = "my/log/directory",
     ...
 };
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
 ```
 
-The following section lists all options.
+You can find the full list of options in the API section: [MixedStorageKVStoreOptions](#mixedstoragekvstoreoptions-class).
+
+#### Advanced Configuration
+For more control over Faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore`:
+
+```csharp
+var logSettings = new LogSettings()
+{
+    // Set options
+    ...
+};
+var fasterKV = new FasterKV<SpanByte, SpanByte>(1L << 20, logSettings));
+var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
+{
+    // Set options
+    LogDirectory = "my/log/directory",
+    ...
+};
+var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions, fasterKVStore: fasterKV);
+```
+
+### On-Disk Data
+This section is an overview of how data is written to and stored on disk. Some basics:
+
+- When is data written to disk? `MixedStorageKVStore` stores data across memory and disk. Data is written to disk when
+the in-memory region of your store is full. You can configure the size of the in-memory region using 
+[`MixedStorageKVStoreOptions.MemorySizeBits`](#mixedstoragekvstoreoptions-class).
+
+- Where is on-disk data located? By default, `<temp path>/FasterLogs`, where `<temp path>` is the value returned by `Path.GetTempPath()`. 
+You can specify `<temp path>` using [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions-class).
+
+The following example writes data to disk:
+
+```csharp
+var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
+{
+    PageSizeBits = 12, // See MixedStorageKVStoreOptions.PageSizeBits in the MixedStorageKVStoreOptions section above
+    MemorySizeBits = 13,
+    DeleteLogOnClose = false // Disables automatic deleting of files on disk. See MixedStorageKVStoreOptions.DeleteLogOnClose in the MixedStorageKVStoreOptions section above
+};
+var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
+
+// Insert
+ConcurrentQueue<Task> upsertTasks = new();
+Parallel.For(0, 100_000, key => upsertTasks.Enqueue(mixedStorageKVStore.UpsertAsync(key, "dummyString1")));
+await Task.WhenAll(upsertTasks).ConfigureAwait(false);
+```
+
+You will find a file in `<temp path>/FasterLogs` named `<guid>.log.0`. An example absolute filepath on windows might look like 
+`C:/Users/UserName/AppData/Local/Temp/FasterLogs/836b4239-ab56-4fa8-b3a5-833cbd198044.log.0`.
+
+#### Managing Files
+By default, files are deleted on `MixedStorageKVStore` disposal or finalization.
+If your program terminates abruptly, files may not get deleted.
+We suggest:
+
+- Placing all files in the same directory. Do this by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions-class) for all `MixedStorageKVStore`s. This is the default behaviour:
+  all files are placed in `<temp path>/FasterLogs`.
+- On application initialization, if the directory exists, delete it.
+    ```csharp
+    try
+    {
+        Directory.Delete(Path.Combine(Path.GetTempPath(), "FasterLogs"), true);
+    }
+    catch
+    {
+        // Do nothing
+    }
+    ```
+
+#### Managing Disk Space
+While `MixedStorageKVStore` performs [log compaction](log-compaction) periodically, data can only be so compact. So long as you're adding new records, 
+the size of your data can grow boundlessly. Therefore, we recommend monitoring disk space the same way you would monitor memory or CPU usage. For example, if you're 
+using a cloud VM, consider setting an alerts for disk space.
+
+## API
+<!-- MixedStorageKVStore generated docs -->
+
+### MixedStorageKVStore<TKey, TValue> Class
+#### Constructors
+##### MixedStorageKVStore(MixedStorageKVStoreOptions, ILogger<MixedStorageKVStore<TKey, TValue>>, FasterKV<SpanByte, SpanByte>)
+
+Creates a `MixedStorageKVStore<TKey, TValue>`.
+```csharp
+public MixedStorageKVStore([MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null], [ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null], [FasterKV<SpanByte, SpanByte>? fasterKVStore = null])
+```
+###### Parameters
+mixedStorageKVStoreOptions `MixedStorageKVStoreOptions`  
+The options for the `MixedStorageKVStore<TKey, TValue>`.
+
+logger `ILogger<MixedStorageKVStore<TKey, TValue>>`  
+The logger for log compaction events.
+
+fasterKVStore `FasterKV<SpanByte, SpanByte>`  
+The underlying `FasterKV<Key, Value>` for the `MixedStorageKVStore<TKey, TValue>`.
+This parameter allows you to use a manually configured Faster instance.
+#### Properties
+##### MixedStorageKVStore<TKey, TValue>.FasterKV
+
+Gets the underlying `FasterKV<Key, Value>` instance.
+```csharp
+public FasterKV<SpanByte, SpanByte> FasterKV { get; }
+```
+#### Methods
+##### MixedStorageKVStore<TKey, TValue>.UpsertAsync(TKey, TValue)
+
+Updates or inserts a record asynchronously.
+```csharp
+public Task UpsertAsync(TKey key, TValue obj)
+```
+###### Parameters
+key `TKey`  
+The record's key.
+
+obj `TValue`  
+The record's new value.
+###### Returns
+The task representing the asynchronous operation.
+###### Exceptions
+`ObjectDisposedException`  
+Thrown if the instance or a dependency is disposed.
+###### Remarks
+This method is thread-safe.
+##### MixedStorageKVStore<TKey, TValue>.DeleteAsync(TKey)
+
+Deletes a record asynchronously.
+```csharp
+public ValueTask<Status> DeleteAsync(TKey key)
+```
+###### Parameters
+key `TKey`  
+The record's key.
+###### Returns
+The task representing the asynchronous operation.
+###### Exceptions
+`ObjectDisposedException`  
+Thrown if the instance or a dependency is disposed.
+###### Remarks
+This method is thread-safe.
+##### MixedStorageKVStore<TKey, TValue>.ReadAsync(TKey)
+
+Reads a record asynchronously.
+```csharp
+public ValueTask<(Status, TValue?)> ReadAsync(TKey key)
+```
+###### Parameters
+key `TKey`  
+The record's key.
+###### Returns
+The task representing the asynchronous operation.
+###### Exceptions
+`ObjectDisposedException`  
+Thrown if the instance or a dependency is disposed.
+###### Remarks
+This method is thread-safe.
+##### MixedStorageKVStore<TKey, TValue>.Dispose()
+
+Disposes this instance.
+```csharp
+public void Dispose()
+```
+<!-- MixedStorageKVStore generated docs -->
 
 <!-- MixedStorageKVStoreOptions generated docs -->
 
@@ -409,166 +571,6 @@ for details.
 
 Defaults to `MessagePackSerializerOptions.Standard` with compression using `MessagePackCompression.Lz4BlockArray`.
 <!-- MixedStorageKVStoreOptions generated docs -->
-
-#### Advanced Configuration
-For more control over Faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore`:
-
-```csharp
-var logSettings = new LogSettings()
-{
-    // Set options
-    ...
-};
-var fasterKV = new FasterKV<SpanByte, SpanByte>(1L << 20, logSettings));
-var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
-{
-    // Set options
-    ...
-};
-var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions, fasterKVStore: fasterKV);
-```
-
-### On-Disk Data
-This section is an overview of how data is written to and stored on disk. Some basics:
-
-- When is data written to disk? `MixedStorageKVStore` stores data across memory and disk. Data is written to disk when
-the in-memory region of your store is full. You can configure the size of the in-memory region using 
-[`MixedStorageKVStoreOptions.MemorySizeBits`](#mixedstoragekvstoreoptions).
-
-- Where is on-disk data located? By default, `<temp path>/FasterLogs`, where `<temp path>` is the value returned by `Path.GetTempPath()`. 
-You can specify `<temp path>` using [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions).
-
-The following example writes data to disk:
-
-```csharp
-var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
-{
-    PageSizeBits = 12, // See MixedStorageKVStoreOptions.PageSizeBits in the MixedStorageKVStoreOptions section above
-    MemorySizeBits = 13,
-    DeleteLogOnClose = false // Disables automatic deleting of files on disk. See MixedStorageKVStoreOptions.DeleteLogOnClose in the MixedStorageKVStoreOptions section above
-};
-var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
-
-// Insert
-ConcurrentQueue<Task> upsertTasks = new();
-Parallel.For(0, 100_000, key => upsertTasks.Enqueue(mixedStorageKVStore.UpsertAsync(key, "dummyString1")));
-await Task.WhenAll(upsertTasks).ConfigureAwait(false);
-```
-
-You will find a file in `<temp path>/FasterLogs` named `<guid>.log.0`. An example absolute filepath on windows might look like 
-`C:/Users/UserName/AppData/Local/Temp/FasterLogs/836b4239-ab56-4fa8-b3a5-833cbd198044.log.0`.
-
-#### Managing Files
-By default, files are deleted on `MixedStorageKVStore` disposal or finalization.
-If your program terminates abruptly, files may not get deleted.
-We suggest:
-
-- Placing all files in the same directory. Do this by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions) for all `MixedStorageKVStore`s. This is the default behaviour:
-  all files are placed in `<temp path>/FasterLogs`.
-- On application initialization, if the directory exists, delete it.
-    ```csharp
-    try
-    {
-        Directory.Delete(Path.Combine(Path.GetTempPath(), "FasterLogs"), true);
-    }
-    catch
-    {
-        // Do nothing
-    }
-    ```
-
-#### Managing Disk Space
-While `MixedStorageKVStore` performs [log compaction](log-compaction) periodically, data can only be so compact. So long as you're adding new records, 
-the size of your data can grow boundlessly. Therefore, we recommend monitoring disk space the same way you would monitor memory or CPU usage. For example, if you're 
-using a cloud VM, consider setting an alerts for disk space.
-
-## API
-<!-- MixedStorageKVStore generated docs -->
-
-### MixedStorageKVStore<TKey, TValue> Class
-#### Constructors
-##### MixedStorageKVStore(MixedStorageKVStoreOptions, ILogger<MixedStorageKVStore<TKey, TValue>>, FasterKV<SpanByte, SpanByte>)
-
-Creates a `MixedStorageKVStore<TKey, TValue>`.
-```csharp
-public MixedStorageKVStore([MixedStorageKVStoreOptions? mixedStorageKVStoreOptions = null], [ILogger<MixedStorageKVStore<TKey, TValue>>? logger = null], [FasterKV<SpanByte, SpanByte>? fasterKVStore = null])
-```
-###### Parameters
-mixedStorageKVStoreOptions `MixedStorageKVStoreOptions`  
-The options for the `MixedStorageKVStore<TKey, TValue>`.
-
-logger `ILogger<MixedStorageKVStore<TKey, TValue>>`  
-The logger for log compaction events.
-
-fasterKVStore `FasterKV<SpanByte, SpanByte>`  
-The underlying `FasterKV<Key, Value>` for the `MixedStorageKVStore<TKey, TValue>`.
-This parameter allows you to use a manually configured Faster instance.
-#### Properties
-##### MixedStorageKVStore<TKey, TValue>.FasterKV
-
-Gets the underlying `FasterKV<Key, Value>` instance.
-```csharp
-public FasterKV<SpanByte, SpanByte> FasterKV { get; }
-```
-#### Methods
-##### MixedStorageKVStore<TKey, TValue>.UpsertAsync(TKey, TValue)
-
-Updates or inserts a record asynchronously.
-```csharp
-public Task UpsertAsync(TKey key, TValue obj)
-```
-###### Parameters
-key `TKey`  
-The record's key.
-
-obj `TValue`  
-The record's new value.
-###### Returns
-The task representing the asynchronous operation.
-###### Exceptions
-`ObjectDisposedException`  
-Thrown if the instance or a dependency is disposed.
-###### Remarks
-This method is thread-safe.
-##### MixedStorageKVStore<TKey, TValue>.DeleteAsync(TKey)
-
-Deletes a record asynchronously.
-```csharp
-public ValueTask<Status> DeleteAsync(TKey key)
-```
-###### Parameters
-key `TKey`  
-The record's key.
-###### Returns
-The task representing the asynchronous operation.
-###### Exceptions
-`ObjectDisposedException`  
-Thrown if the instance or a dependency is disposed.
-###### Remarks
-This method is thread-safe.
-##### MixedStorageKVStore<TKey, TValue>.ReadAsync(TKey)
-
-Reads a record asynchronously.
-```csharp
-public ValueTask<(Status, TValue?)> ReadAsync(TKey key)
-```
-###### Parameters
-key `TKey`  
-The record's key.
-###### Returns
-The task representing the asynchronous operation.
-###### Exceptions
-`ObjectDisposedException`  
-Thrown if the instance or a dependency is disposed.
-###### Remarks
-This method is thread-safe.
-##### MixedStorageKVStore<TKey, TValue>.Dispose()
-
-Disposes this instance.
-```csharp
-public void Dispose()
-```
-<!-- MixedStorageKVStore generated docs -->
 
 ## Performance
 ### Benchmarks
@@ -712,13 +714,13 @@ empty
 ```
 
 `MixedStorageKeyValueStore` has Faster "pre-allocate" files to speeds up inserts. This means files are not created empty and left to grow gradually, 
-instead they are created at the segment size of our choosing (see [`MixedStorageKVStoreOptions.SegmentSizeBits`](#mixedstoragekvstoreoptions)) and populated gradually.
+instead they are created at the segment size of our choosing (see [`MixedStorageKVStoreOptions.SegmentSizeBits`](#mixedstoragekvstoreoptions-class)) and populated gradually.
 Choosing a larger segment size means more empty, "reserved" disk space. Choosing a smaller segment size means creating more files. It's up to you to
 to weigh tradeoffs.
 
 The log is also subdivided into **pages**. Pages are a separate concept from segments - segments typically consist of multiple pages.
 Pages are contiguous blocks of in-memory or on-disk storage. What are pages for? Records are moved around as pages. For example, when we add records, 
-they are held in memory and only written to the log after we've added enough to fill a page. You can specify page size using [`MixedStorageKVStoreOptions.PageSizeBits`](#mixedstoragekvstoreoptions).
+they are held in memory and only written to the log after we've added enough to fill a page. You can specify page size using [`MixedStorageKVStoreOptions.PageSizeBits`](#mixedstoragekvstoreoptions-class).
 
 Note: Both segments and pages affect Faster in ways that aren't relevant to the current `MixedStorageKeyValueStore` implementation. Refer to the official Faster documentation
 to learn more about these concepts.
