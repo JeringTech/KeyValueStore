@@ -16,15 +16,16 @@ end_of_line = lf
 insert_final_newline = true
 
 # Analyzers
-
+[*.cs]
 # var
 dotnet_diagnostic.IDE0007.severity = error
 dotnet_diagnostic.IDE0008.severity = error
 csharp_style_var_when_type_is_apparent = true
 csharp_style_var_elsewhere = false
 
-# ConfigureAwait
+# async/await
 dotnet_diagnostic.CA2007.severity = error
+dotnet_diagnostic.CS4014.severity = none
 
 # Naming
 dotnet_naming_symbols.const_fields.applicable_kinds = field

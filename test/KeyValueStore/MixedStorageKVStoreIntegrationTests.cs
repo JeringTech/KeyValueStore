@@ -3,6 +3,7 @@ using MessagePack;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,6 +15,7 @@ using Xunit;
 
 namespace Jering.KeyValueStore.Tests
 {
+ #pragma warning disable CA2012 // Can't await in Parallel.For actions
     /// <summary>
     /// Verifies behaviour of <see cref="IMixedStorageKVStore{TKey, TValue}"/> implementations and their underlying <see cref="FasterKV{TKey, TValue}"/> instances. They:
     /// <list type="bullet">
@@ -27,6 +29,7 @@ namespace Jering.KeyValueStore.Tests
     {
         private const int TIMEOUT_MS = 60000;
         private readonly MixedStorageKVStoreIntegrationTestsFixture _fixture;
+        private readonly MessagePackSerializerOptions _messagePackSerializerOptions = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
 
         public MixedStorageKVStoreIntegrationTests(MixedStorageKVStoreIntegrationTestsFixture fixture)
         {
@@ -47,31 +50,60 @@ namespace Jering.KeyValueStore.Tests
             };
             DummyClass dummyClassInstance = CreatePopulatedDummyClassInstance();
             int numRecords = 10000;
-            //using var testSubject = new ObjLogMixedStorageKVStore<int, DummyClass>(dummyOptions);
-            //using var testSubject = new MemoryMixedStorageKVStore<int, DummyClass>(dummyOptions);
             using var testSubject = new MixedStorageKVStore<int, DummyClass>(dummyOptions);
 
             // Act and assert
 
             // Insert
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance));
+            ConcurrentQueue<Task> upsertTasks = new();
+            Parallel.For(0, numRecords, key => upsertTasks.Enqueue(testSubject.UpsertAsync(key, dummyClassInstance)));
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
 
-            // Read
-            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
+            // Read and verify inserts
+            ConcurrentQueue<ValueTask<(Status, DummyClass?)>> readTasks = new();
+            Parallel.For(0, numRecords, key => readTasks.Enqueue(testSubject.ReadAsync(key)));
+            foreach (ValueTask<(Status, DummyClass?)> task in readTasks)
+            {
+                (Status status, DummyClass? result) = await task.ConfigureAwait(false);
+                Assert.Equal(Status.OK, status);
+                Assert.Equal(dummyClassInstance, result);
+            }
 
             // Update
             dummyClassInstance.DummyInt = 20;
             dummyClassInstance.DummyString = "anotherDummyString";
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance));
+            upsertTasks.Clear();
+            Parallel.For(0, numRecords, key => upsertTasks.Enqueue(testSubject.UpsertAsync(key, dummyClassInstance)));
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
 
-            // Verify updates
-            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.OK, dummyClassInstance).ConfigureAwait(false);
+            // Read and verify updates
+            readTasks.Clear();
+            Parallel.For(0, numRecords, key => readTasks.Enqueue(testSubject.ReadAsync(key)));
+            foreach (ValueTask<(Status, DummyClass?)> task in readTasks)
+            {
+                (Status status, DummyClass? result) = await task.ConfigureAwait(false);
+                Assert.Equal(Status.OK, status);
+                Assert.Equal(dummyClassInstance, result);
+            }
 
             // Delete
-            Parallel.For(0, numRecords, key => testSubject.Delete(key));
+            ConcurrentQueue<ValueTask<Status>> deleteTasks = new();
+            Parallel.For(0, numRecords, key => deleteTasks.Enqueue(testSubject.DeleteAsync(key)));
+            foreach (ValueTask<Status> task in deleteTasks)
+            {
+                Status status = await task.ConfigureAwait(false);
+                Assert.Equal(Status.OK, status);
+            }
 
             // Verify deletes
-            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.NOTFOUND, null).ConfigureAwait(false);
+            readTasks.Clear();
+            Parallel.For(0, numRecords, key => readTasks.Enqueue(testSubject.ReadAsync(key)));
+            foreach (ValueTask<(Status, DummyClass?)> task in readTasks)
+            {
+                (Status status, DummyClass? result) = await task.ConfigureAwait(false);
+                Assert.Equal(Status.NOTFOUND, status);
+                Assert.Null(result);
+            }
         }
 
         [Fact]
@@ -91,27 +123,23 @@ namespace Jering.KeyValueStore.Tests
             // Act and assert
 
             // Insert
+            ConcurrentQueue<Task> upsertTasks = new();
             Parallel.For(0, numRecords, key =>
             {
                 string keyAsString = key.ToString();
-                testSubject.Upsert(keyAsString, keyAsString);
+                upsertTasks.Enqueue(testSubject.UpsertAsync(keyAsString, keyAsString));
             });
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
 
-            // Read
-            List<Task<(Status, string?)>> readTasks = new();
-            for (int key = 0; key < numRecords; key++)
+            // Read and verify inserts
+            ConcurrentDictionary<int, ValueTask<(Status, string?)>> readTasks = new();
+            Parallel.For(0, numRecords, key => readTasks.TryAdd(key, testSubject.ReadAsync(key.ToString())));
+            foreach (KeyValuePair<int, ValueTask<(Status, string?)>> keyValuePair in readTasks)
             {
-                readTasks.Add(ReadAsync(key.ToString(), testSubject));
-            }
-            await Task.WhenAll(readTasks).ConfigureAwait(false);
-
-            // Verify
-            Parallel.For(0, numRecords, key =>
-            {
-                (Status status, string? result) = readTasks[key].Result;
+                (Status status, string? result) = await keyValuePair.Value.ConfigureAwait(false);
                 Assert.Equal(Status.OK, status);
-                Assert.Equal(key.ToString(), result);
-            });
+                Assert.Equal(keyValuePair.Key.ToString(), result);
+            }
         }
 
         [Fact]
@@ -138,32 +166,31 @@ namespace Jering.KeyValueStore.Tests
             // Act and assert
 
             // Insert
+            ConcurrentQueue<Task> upsertTasks = new();
             Parallel.For(0, numRecords, key =>
             {
                 DummyVariableLengthStruct localDummyStructInstance = dummyStructInstance;
                 localDummyStructInstance.DummyInt = key;
-                testSubject.Upsert(localDummyStructInstance, localDummyStructInstance);
+                upsertTasks.Enqueue(testSubject.UpsertAsync(localDummyStructInstance, localDummyStructInstance));
             });
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
 
-            // Read
-            List<Task<(Status, DummyVariableLengthStruct)>> readTasks = new();
-            for (int key = 0; key < numRecords; key++)
+            // Read and verify
+            ConcurrentDictionary<int, ValueTask<(Status, DummyVariableLengthStruct)>> readTasks = new();
+            Parallel.For(0, numRecords, key =>
             {
                 DummyVariableLengthStruct localDummyStructInstance = dummyStructInstance;
                 localDummyStructInstance.DummyInt = key;
-                readTasks.Add(ReadAsync(localDummyStructInstance, testSubject));
-            }
-            await Task.WhenAll(readTasks).ConfigureAwait(false);
-
-            // Verify
-            for (int key = 0; key < numRecords; key++)
+                readTasks.TryAdd(key, testSubject.ReadAsync(localDummyStructInstance));
+            });
+            foreach (KeyValuePair<int, ValueTask<(Status, DummyVariableLengthStruct)>> keyValuePair in readTasks)
             {
-                (Status status, DummyVariableLengthStruct result) = readTasks[key].Result;
+                (Status status, DummyVariableLengthStruct result) = await keyValuePair.Value.ConfigureAwait(false);
                 Assert.Equal(Status.OK, status);
                 DummyVariableLengthStruct localDummyStructInstance = dummyStructInstance;
-                localDummyStructInstance.DummyInt = key;
+                localDummyStructInstance.DummyInt = keyValuePair.Key;
                 Assert.Equal(localDummyStructInstance, result);
-            };
+            }
         }
 
         [Fact]
@@ -190,32 +217,31 @@ namespace Jering.KeyValueStore.Tests
             // Act and assert
 
             // Insert
+            ConcurrentQueue<Task> upsertTasks = new();
             Parallel.For(0, numRecords, key =>
             {
                 DummyFixedLengthStruct localDummyStructInstance = dummyStructInstance;
                 localDummyStructInstance.DummyInt = key;
-                testSubject.Upsert(localDummyStructInstance, localDummyStructInstance);
+                upsertTasks.Enqueue(testSubject.UpsertAsync(localDummyStructInstance, localDummyStructInstance));
             });
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
 
-            // Read
-            List<Task<(Status, DummyFixedLengthStruct)>> readTasks = new();
-            for (int key = 0; key < numRecords; key++)
+            // Read and verify
+            ConcurrentDictionary<int, ValueTask<(Status, DummyFixedLengthStruct)>> readTasks = new();
+            Parallel.For(0, numRecords, key =>
             {
                 DummyFixedLengthStruct localDummyStructInstance = dummyStructInstance;
                 localDummyStructInstance.DummyInt = key;
-                readTasks.Add(ReadAsync(localDummyStructInstance, testSubject));
-            }
-            await Task.WhenAll(readTasks).ConfigureAwait(false);
-
-            // Verify
-            for (int key = 0; key < numRecords; key++)
+                readTasks.TryAdd(key, testSubject.ReadAsync(localDummyStructInstance));
+            });
+            foreach (KeyValuePair<int, ValueTask<(Status, DummyFixedLengthStruct)>> keyValuePair in readTasks)
             {
-                (Status status, DummyFixedLengthStruct result) = readTasks[key].Result;
+                (Status status, DummyFixedLengthStruct result) = await keyValuePair.Value.ConfigureAwait(false);
                 Assert.Equal(Status.OK, status);
                 DummyFixedLengthStruct localDummyStructInstance = dummyStructInstance;
-                localDummyStructInstance.DummyInt = key;
+                localDummyStructInstance.DummyInt = keyValuePair.Key;
                 Assert.Equal(localDummyStructInstance, result);
-            };
+            }
         }
 
         [Fact]
@@ -234,12 +260,25 @@ namespace Jering.KeyValueStore.Tests
             using var testSubject = new MixedStorageKVStore<int, int>(dummyOptions);
 
             // Act and assert
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyValue));
-            await ReadAndVerifyValuesAsync(numRecords, testSubject, Status.OK, dummyValue).ConfigureAwait(false);
+
+            // Insert
+            ConcurrentQueue<Task> upsertTasks = new();
+            Parallel.For(0, numRecords, key => upsertTasks.Enqueue(testSubject.UpsertAsync(key, dummyValue)));
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
+
+            // Read and verify
+            ConcurrentQueue<ValueTask<(Status, int)>> readTasks = new();
+            Parallel.For(0, numRecords, key => readTasks.Enqueue(testSubject.ReadAsync(key)));
+            foreach (ValueTask<(Status, int)> task in readTasks)
+            {
+                (Status status, int result) = await task.ConfigureAwait(false);
+                Assert.Equal(Status.OK, status);
+                Assert.Equal(dummyValue, result);
+            }
         }
 
         [Fact]
-        public void LogFiles_DeletedOnClose()
+        public async Task LogFiles_DeletedOnClose()
         {
             // Arrange
             string directory = Path.Combine(_fixture.TempDirectory, nameof(LogFiles_DeletedOnClose)); // Use a separate directory so the test is never affected by other tests
@@ -253,7 +292,9 @@ namespace Jering.KeyValueStore.Tests
             DummyClass dummyClassInstance = CreatePopulatedDummyClassInstance();
             int numRecords = 50; // Just enough to make sure log files are created. Segment size isn't exceeded (only 1 of each log file).
             var testSubject = new MixedStorageKVStore<int, DummyClass>(dummyOptions);
-            Parallel.For(0, numRecords, key => testSubject.Upsert(key, dummyClassInstance)); // Creates log
+            ConcurrentQueue<Task> upsertTasks = new();
+            Parallel.For(0, numRecords, key => upsertTasks.Enqueue(testSubject.UpsertAsync(key, dummyClassInstance))); // Creates log
+            await Task.WhenAll(upsertTasks).ConfigureAwait(false);
             Assert.Single(Directory.EnumerateFiles(directory, $"{nameof(LogFiles_DeletedOnClose)}*")); // Log and object log
 
             // Act
@@ -324,12 +365,11 @@ namespace Jering.KeyValueStore.Tests
             // For quicker tests, use thread local sessions.
             FasterKV<SpanByte, SpanByte>? dummyFasterKVStore = null;
             ThreadLocal<ClientSession<SpanByte, SpanByte, SpanByte, SpanByteAndMemory, Empty, SpanByteFunctions<Empty>>>? dummyThreadLocalSession = null;
+
             try
             {
                 dummyFasterKVStore = new FasterKV<SpanByte, SpanByte>(1L << 20, logSettings);
                 FasterKV<SpanByte, SpanByte>.ClientSessionBuilder<SpanByte, SpanByteAndMemory, Empty> dummyClientSessionBuilder = dummyFasterKVStore.For(new SpanByteFunctions<Empty>());
-                dummyThreadLocalSession = new(() => dummyClientSessionBuilder.NewSession<SpanByteFunctions<Empty>>(), true);
-                MessagePackSerializerOptions dummyMessagePackSerializerOptions = MessagePackSerializerOptions.Standard.WithCompression(MessagePackCompression.Lz4BlockArray);
 
                 // Record size estimate:
                 // - dummyClassInstance serialized and compressed = ~73 bytes
@@ -342,40 +382,13 @@ namespace Jering.KeyValueStore.Tests
                 // n * 92 - 8192 > InitialLogCompactionThresholdBytes
 
                 // Insert
-                byte[] dummyValueBytes = MessagePackSerializer.Serialize(dummyClassInstance, dummyMessagePackSerializerOptions);
-                Parallel.For(0, 500, key =>
-                {
-                    byte[] dummyKeyBytes = MessagePackSerializer.Serialize(key, dummyMessagePackSerializerOptions);
-                    unsafe
-                    {
-                        // Upsert
-                        fixed (byte* keyPointer = dummyKeyBytes)
-                        fixed (byte* valuePointer = dummyValueBytes)
-                        {
-                            var keySpanByte = SpanByte.FromPointer(keyPointer, dummyKeyBytes.Length);
-                            var objSpanByte = SpanByte.FromPointer(valuePointer, dummyValueBytes.Length);
-                            dummyThreadLocalSession.Value.Upsert(ref keySpanByte, ref objSpanByte);
-                        }
-                    }
-                });
+                byte[] dummyValueBytes = MessagePackSerializer.Serialize(dummyClassInstance, _messagePackSerializerOptions);
+                await UpsertRangeAsync(0, 500, dummyValueBytes, dummyClientSessionBuilder).ConfigureAwait(false);
+
                 // Update so compaction does something. Can't update in insert loop or we'll get a bunch of in-place updates.
                 dummyClassInstance.DummyInt++;
-                dummyValueBytes = MessagePackSerializer.Serialize(dummyClassInstance, dummyMessagePackSerializerOptions);
-                Parallel.For(0, 500, key =>
-                {
-                    byte[] dummyKeyBytes = MessagePackSerializer.Serialize(key, dummyMessagePackSerializerOptions);
-                    unsafe
-                    {
-                        // Upsert
-                        fixed (byte* keyPointer = dummyKeyBytes)
-                        fixed (byte* valuePointer = dummyValueBytes)
-                        {
-                            var keySpanByte = SpanByte.FromPointer(keyPointer, dummyKeyBytes.Length);
-                            var objSpanByte = SpanByte.FromPointer(valuePointer, dummyValueBytes.Length);
-                            dummyThreadLocalSession.Value.Upsert(ref keySpanByte, ref objSpanByte);
-                        }
-                    }
-                });
+                dummyValueBytes = MessagePackSerializer.Serialize(dummyClassInstance, _messagePackSerializerOptions);
+                await UpsertRangeAsync(0, 500, dummyValueBytes, dummyClientSessionBuilder).ConfigureAwait(false);
             }
             finally
             {
@@ -390,7 +403,7 @@ namespace Jering.KeyValueStore.Tests
 
             // We compact 20% of the safe-readonly region of the log. Since we inserted then updated, compaction here means removal.
             // 90048 * 0.8 = 72038, ~72000 (missing 38 bytes likely has to do with the fact that we can't remove only part of a record). 
-            string expectedResultStart = $"{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 90048, 72000, 1)}";
+            string expectedResultStart = $"{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 94144, 75232, 1)}";
             int expectedResultStartLength = expectedResultStart.Length;
 
             // Act
@@ -449,39 +462,12 @@ namespace Jering.KeyValueStore.Tests
 
                 // Insert
                 byte[] dummyValueBytes = MessagePackSerializer.Serialize(dummyClassInstance, dummyMessagePackSerializerOptions);
-                Parallel.For(0, 500, key =>
-                {
-                    byte[] dummyKeyBytes = MessagePackSerializer.Serialize(key, dummyMessagePackSerializerOptions);
-                    unsafe
-                    {
-                        // Upsert
-                        fixed (byte* keyPointer = dummyKeyBytes)
-                        fixed (byte* valuePointer = dummyValueBytes)
-                        {
-                            var keySpanByte = SpanByte.FromPointer(keyPointer, dummyKeyBytes.Length);
-                            var objSpanByte = SpanByte.FromPointer(valuePointer, dummyValueBytes.Length);
-                            dummyThreadLocalSession.Value.Upsert(ref keySpanByte, ref objSpanByte);
-                        }
-                    }
-                });
+                await UpsertRangeAsync(0, 500, dummyValueBytes, dummyClientSessionBuilder).ConfigureAwait(false);
+
                 // Update so compaction does something. Can't update in insert loop or we'll get a bunch of in-place updates.
                 dummyClassInstance.DummyInt++;
                 dummyValueBytes = MessagePackSerializer.Serialize(dummyClassInstance, dummyMessagePackSerializerOptions);
-                Parallel.For(0, 500, key =>
-                {
-                    byte[] dummyKeyBytes = MessagePackSerializer.Serialize(key, dummyMessagePackSerializerOptions);
-                    unsafe
-                    {
-                        // Upsert
-                        fixed (byte* keyPointer = dummyKeyBytes)
-                        fixed (byte* valuePointer = dummyValueBytes)
-                        {
-                            var keySpanByte = SpanByte.FromPointer(keyPointer, dummyKeyBytes.Length);
-                            var objSpanByte = SpanByte.FromPointer(valuePointer, dummyValueBytes.Length);
-                            dummyThreadLocalSession.Value.Upsert(ref keySpanByte, ref objSpanByte);
-                        }
-                    }
-                });
+                await UpsertRangeAsync(0, 500, dummyValueBytes, dummyClientSessionBuilder).ConfigureAwait(false);
             }
             finally
             {
@@ -496,19 +482,19 @@ namespace Jering.KeyValueStore.Tests
 
             // Runs 5 consecutive compactions, increases threshold, runs 5 more consecutive compactions (all redundant), increases threshold above 
             // safe-readonly region size, skips compactions thereafter.
-            string expectedResultStart = @$"{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 90048, 72000, 1)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 72000, 57600, 2)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 57600, 46080, 3)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 46080, 40960, 4)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 40960, 40960, 5)}
+            string expectedResultStart = @$"{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 94144, 75232, 1)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 75232, 60096, 2)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 60096, 48000, 3)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 48000, 46560, 4)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 46560, 45408, 5)}
 {LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompactionThresholdIncreased, 20000, 40000)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 40960, 40960, 1)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 40960, 40960, 2)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 40960, 40960, 3)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 40960, 40960, 4)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 40960, 40960, 5)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 45408, 48576, 1)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 48576, 47040, 2)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 47040, 45792, 3)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 45792, 44768, 4)}
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompacted, 44768, 48096, 5)}
 {LogLevel.Trace}: {string.Format(Strings.LogTrace_LogCompactionThresholdIncreased, 40000, 80000)}
-{LogLevel.Trace}: {string.Format(Strings.LogTrace_SkippingLogCompaction, 40960, 80000)}";
+{LogLevel.Trace}: {string.Format(Strings.LogTrace_SkippingLogCompaction, 48096, 80000)}";
             int expectedResultStartLength = expectedResultStart.Length;
 
             // Act
@@ -521,10 +507,43 @@ namespace Jering.KeyValueStore.Tests
             }
 
             // Assert
-            Assert.StartsWith(expectedResultStart, resultStringBuilder.ToString().Replace("\r\n", "\n"));
+            Assert.StartsWith(expectedResultStart.Replace("\r\n", "\n"), resultStringBuilder.ToString().Replace("\r\n", "\n"));
         }
 
         #region Helpers
+        // Upserts the same value to a range of keys
+        private async Task UpsertRangeAsync(int startKey,
+            int endKey,
+            byte[] valueBytes,
+            FasterKV<SpanByte, SpanByte>.ClientSessionBuilder<SpanByte, SpanByteAndMemory, Empty> clientSessionBuilder)
+        {
+            ConcurrentQueue<ValueTask<FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty>>> upsertTasks = new();
+            Parallel.For(startKey, endKey, key =>
+            {
+                byte[] dummyKeyBytes = MessagePackSerializer.Serialize(key, _messagePackSerializerOptions);
+                unsafe
+                {
+                    // Upsert
+                    fixed (byte* keyPointer = dummyKeyBytes)
+                    fixed (byte* valuePointer = valueBytes)
+                    {
+                        var keySpanByte = SpanByte.FromPointer(keyPointer, dummyKeyBytes.Length);
+                        var objSpanByte = SpanByte.FromPointer(valuePointer, valueBytes.Length);
+                        upsertTasks.Enqueue(clientSessionBuilder.NewSession<SpanByteFunctions<Empty>>().UpsertAsync(ref keySpanByte, ref objSpanByte));
+                    }
+                }
+            });
+            foreach (ValueTask<FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty>> task in upsertTasks)
+            {
+                FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await task.ConfigureAwait(false);
+
+                while (result.Status == Status.PENDING)
+                {
+                    result = await result.CompleteAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
         private static DummyClass CreatePopulatedDummyClassInstance()
         {
             return new DummyClass()
@@ -547,37 +566,6 @@ namespace Jering.KeyValueStore.Tests
             ServiceProvider serviceProvider = services.BuildServiceProvider();
 
             return serviceProvider.GetRequiredService<ILogger<MixedStorageKVStore<TKey, TValue>>>();
-        }
-
-        private static async Task ReadAndVerifyValuesAsync<TValue>(int numRecords,
-            IMixedStorageKVStore<int, TValue> MixedStorageKVStore,
-            Status expectedStatus,
-            TValue? expectedResult)
-        {
-            // Read
-            List<Task<(Status, TValue?)>> readTasks = new();
-            for (int key = 0; key < numRecords; key++)
-            {
-                readTasks.Add(ReadAsync(key, MixedStorageKVStore));
-            }
-            await Task.WhenAll(readTasks).ConfigureAwait(false);
-
-            // Verify
-            Parallel.For(0, numRecords, index =>
-            {
-                (Status status, TValue? result) = readTasks[index].Result;
-                Assert.Equal(expectedStatus, status);
-                Assert.Equal(expectedResult, result);
-            });
-        }
-
-        private static async Task<(Status, TValue?)> ReadAsync<TKey, TValue>(TKey key, IMixedStorageKVStore<TKey, TValue> MixedStorageKVStore)
-        {
-            // Parallel.For doesn't await async actions, so we use Task.Yield to ensure operations run completely asynchronously and complete as
-            // quickly as possible.
-            await Task.Yield();
-
-            return await MixedStorageKVStore.ReadAsync(key).ConfigureAwait(false);
         }
         #endregion
 
@@ -614,6 +602,16 @@ namespace Jering.KeyValueStore.Tests
             {
                 return HashCode.Combine(DummyByte, DummyShort, DummyInt, DummyLong);
             }
+
+            public static bool operator ==(DummyFixedLengthStruct left, DummyFixedLengthStruct right)
+            {
+                return left.Equals(right);
+            }
+
+            public static bool operator !=(DummyFixedLengthStruct left, DummyFixedLengthStruct right)
+            {
+                return !(left == right);
+            }
         }
 
         [MessagePackObject]
@@ -649,6 +647,16 @@ namespace Jering.KeyValueStore.Tests
             public override int GetHashCode()
             {
                 return HashCode.Combine(DummyString, DummyStringArray, DummyInt, DummyIntArray);
+            }
+
+            public static bool operator ==(DummyVariableLengthStruct left, DummyVariableLengthStruct right)
+            {
+                return left.Equals(right);
+            }
+
+            public static bool operator !=(DummyVariableLengthStruct left, DummyVariableLengthStruct right)
+            {
+                return !(left == right);
             }
         }
 

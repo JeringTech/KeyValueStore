@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Jering.KeyValueStore.Generators
 {
-    public abstract class SourceGenerator : ISourceGenerator
+    public abstract class SourceGenerator<T> : ISourceGenerator where T : ISyntaxReceiver, new()
     {
         protected static readonly DiagnosticDescriptor _unexpectedException = new("G0006",
             "UnexpectedException",
@@ -14,13 +14,12 @@ namespace Jering.KeyValueStore.Generators
             DiagnosticSeverity.Error,
             true);
 
-        private string _logFilePath = string.Empty;
+        private volatile string _logFilePath = string.Empty;
 
         protected string _projectDirectory;
         protected string _solutionDirectory;
 
         protected abstract void ExecuteCore(ref GeneratorExecutionContext context);
-        protected abstract void OnVisitSyntaxNode(SyntaxNode syntaxNode);
 
         protected virtual void InitializeCore() { }
 
@@ -28,11 +27,19 @@ namespace Jering.KeyValueStore.Generators
         {
             try
             {
+                // Initialize directories and file paths. This can only be done when we receive the first syntax tree.
+                // If these directories and paths change, VS has to be restarted, so this only needs to be done once.
                 if (_logFilePath == string.Empty)
                 {
-                    _projectDirectory = Path.GetDirectoryName(context.Compilation.SyntaxTrees.First(tree => tree.FilePath.EndsWith("Program.cs")).FilePath);
-                    _solutionDirectory = Path.Combine(_projectDirectory, "../..");
-                    _logFilePath = Path.Combine(_projectDirectory, $"{GetType().Name}.txt");
+                    lock (this)
+                    {
+                        if (_logFilePath == string.Empty)
+                        {
+                            _projectDirectory = Path.GetDirectoryName(context.Compilation.SyntaxTrees.First(tree => tree.FilePath.EndsWith("AssemblyInfo.cs")).FilePath);
+                            _solutionDirectory = Path.Combine(_projectDirectory, "../..");
+                            _logFilePath = Path.Combine(_projectDirectory, $"{GetType().Name}.txt");
+                        }
+                    }
                 }
 
                 ExecuteCore(ref context);
@@ -46,7 +53,7 @@ namespace Jering.KeyValueStore.Generators
         public void Initialize(GeneratorInitializationContext context)
         {
             // Register a factory that can create our custom syntax receiver
-            context.RegisterForSyntaxNotifications(() => new SyntaxReceiver(OnVisitSyntaxNode));
+            context.RegisterForSyntaxNotifications(() => new T());
             InitializeCore();
         }
 
@@ -55,21 +62,6 @@ namespace Jering.KeyValueStore.Generators
 #pragma warning restore IDE0060
         {
             //File.AppendAllText(_logFilePath, message + "\n");
-        }
-
-        private class SyntaxReceiver : ISyntaxReceiver
-        {
-            private readonly Action<SyntaxNode> _onVisitSyntaxNode;
-
-            public SyntaxReceiver(Action<SyntaxNode> onVisitSyntaxNode)
-            {
-                _onVisitSyntaxNode = onVisitSyntaxNode;
-            }
-
-            public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
-            {
-                _onVisitSyntaxNode(syntaxNode);
-            }
         }
     }
 }
