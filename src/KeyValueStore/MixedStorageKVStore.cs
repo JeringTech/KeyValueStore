@@ -120,6 +120,7 @@ namespace Jering.KeyValueStore
             int valueLength = arrayBufferWriter.WrittenCount - keyLength;
 
             // Upsert
+            FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty> result;
             using (MemoryHandle memoryHandle = arrayBufferWriter.WrittenMemory.Pin())
             {
                 SpanByte keySpanByte;
@@ -131,17 +132,20 @@ namespace Jering.KeyValueStore
                     objSpanByte = SpanByte.FromPointer(pointer + keyLength, valueLength);
                 }
 
-                FasterKV<SpanByte, SpanByte>.UpsertAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await session.UpsertAsync(keySpanByte, objSpanByte).ConfigureAwait(false);
+                result = await session.UpsertAsync(ref keySpanByte, ref objSpanByte).ConfigureAwait(false);
+            }
 
-                while (result.Status == Status.PENDING)
-                {
-                    result = await result.CompleteAsync().ConfigureAwait(false);
-                }
+            // No longer needed
+            arrayBufferWriter.Clear();
+            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
+
+            // Wait for completion
+            while (result.Status == Status.PENDING)
+            {
+                result = await result.CompleteAsync().ConfigureAwait(false);
             }
 
             // Clean up
-            arrayBufferWriter.Clear();
-            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
             _sessionPool.Enqueue(session);
         }
 
@@ -162,7 +166,7 @@ namespace Jering.KeyValueStore
             int keyLength = arrayBufferWriter.WrittenCount;
 
             // Delete
-            Status status;
+            FasterKV<SpanByte, SpanByte>.DeleteAsyncResult<SpanByte, SpanByteAndMemory, Empty> result;
             using (MemoryHandle memoryHandle = arrayBufferWriter.WrittenMemory.Pin())
             {
                 SpanByte keySpanByte;
@@ -171,22 +175,23 @@ namespace Jering.KeyValueStore
                     keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, keyLength);
                 }
 
-                FasterKV<SpanByte, SpanByte>.DeleteAsyncResult<SpanByte, SpanByteAndMemory, Empty> result = await session.DeleteAsync(ref keySpanByte).ConfigureAwait(false);
+                result = await session.DeleteAsync(ref keySpanByte).ConfigureAwait(false);
+            }
 
-                while (result.Status == Status.PENDING)
-                {
-                    result = await result.CompleteAsync().ConfigureAwait(false);
-                }
+            // No longer needed
+            arrayBufferWriter.Clear();
+            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
 
-                status = result.Status;
+            // Wait for completion
+            while (result.Status == Status.PENDING)
+            {
+                result = await result.CompleteAsync().ConfigureAwait(false);
             }
 
             // Clean up
-            arrayBufferWriter.Clear();
-            _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
             _sessionPool.Enqueue(session);
 
-            return status;
+            return result.Status;
         }
 
         /// <inheritdoc />
@@ -206,8 +211,7 @@ namespace Jering.KeyValueStore
             int keyLength = arrayBufferWriter.WrittenCount;
 
             // Read
-            Status status;
-            SpanByteAndMemory spanByteAndMemory;
+            FasterKV<SpanByte, SpanByte>.ReadAsyncResult<SpanByte, SpanByteAndMemory, Empty> result;
             using (MemoryHandle memoryHandle = arrayBufferWriter.WrittenMemory.Pin())
             {
                 SpanByte keySpanByte;
@@ -216,12 +220,17 @@ namespace Jering.KeyValueStore
                     keySpanByte = SpanByte.FromPointer((byte*)memoryHandle.Pointer, keyLength);
                 }
 
-                (status, spanByteAndMemory) = (await session.ReadAsync(ref keySpanByte).ConfigureAwait(false)).Complete();
+                result = await session.ReadAsync(ref keySpanByte).ConfigureAwait(false);
             }
 
-            // Clean up
+            // No longer needed
             arrayBufferWriter.Clear();
             _arrayBufferWriterPool.Enqueue(arrayBufferWriter);
+
+            // Wait for completion
+            (Status status, SpanByteAndMemory spanByteAndMemory) = result.Complete();
+
+            // Clean up
             _sessionPool.Enqueue(session);
 
             // Deserialize
