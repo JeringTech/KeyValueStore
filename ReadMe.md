@@ -87,15 +87,16 @@ Using .Net CLI:
 
 ## Usage
 ### Key and Value Types
-You can use any type [MessagePack C# serializes](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) as a `MixedStorageKVStore` key or value type.
-Custom types must be annotated according to [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization).  
+You can use any type [MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) serializes as a `MixedStorageKVStore` key or value type.  
 
-Note: [MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) is a performant binary serialization library.
+This includes [built-in types](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) and custom types annotated according to 
+[MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization).  
 
 #### Common Key and Value Types
-The following examples demonstrate common key and value types. 
+The following are examples of common key and value types. 
 
-Given class `DummyClass`:
+##### Reference Types
+Here's a custom reference-type annotated according to MessagePack C# conventions:
 ```csharp
 [MessagePackObject] // MessagePack C# attribute
 public class DummyClass
@@ -113,9 +114,9 @@ public class DummyClass
     public int[]? DummyIntArray { get; set; }
 }
 ```
-Here's a `MixedStorageKVStore` with `object` key and value types (in this example, `string` and `DummyClass`):
+We can use it, together with the built-in reference type `string` as value and key types:
 ```csharp
-var mixedStorageKVStore = new MixedStorageKVStore<string, DummyClass>();
+var mixedStorageKVStore = new MixedStorageKVStore<string, DummyClass>(); // string key, DummyClass value
 var dummyClassInstance = new DummyClass()
 {
     DummyString = "dummyString",
@@ -137,7 +138,8 @@ Assert.Equal(dummyClassInstance.DummyStringArray, result!.DummyStringArray);
 Assert.Equal(dummyClassInstance.DummyInt, result!.DummyInt);
 Assert.Equal(dummyClassInstance.DummyIntArray, result!.DummyIntArray);
 ```
-Given fixed-length-struct `DummyStruct`:
+##### Value Types
+Here's a custom value-type annotated according to MessagePack C# conventions:
 ```csharp
 [MessagePackObject]
 public struct DummyStruct
@@ -155,9 +157,9 @@ public struct DummyStruct
     public long DummyLong { get; set; }
 }
 ```
-Here's a `MixedStorageKVStore` with value-type key and value types (in this example, `int` and `DummyStruct`):
+We can use it, together with the built-in reference type `int` as value and key types:
 ```csharp
-var mixedStorageKVStore = new MixedStorageKVStore<int, DummyStruct>();
+var mixedStorageKVStore = new MixedStorageKVStore<int, DummyStruct>(); // int key, DummyStruct value
 var dummyStructInstance = new DummyStruct()
 {
     // Populate with dummy values
@@ -590,18 +592,18 @@ View source [here](https://github.com/JeringTech/KeyValueStore/blob/main/perf/Ke
 
 Results:
 
-|                     Method |       Mean |     Error |    StdDev |     Median |      Gen 0 |      Gen 1 |     Gen 2 | Allocated |
-|--------------------------- |-----------:|----------:|----------:|-----------:|-----------:|-----------:|----------:|----------:|
-| Inserts_WithoutCompression |   721.3 ms | 106.88 ms | 296.17 ms |   591.2 ms | 29000.0000 |  3000.0000 | 1000.0000 | 137.35 MB |
-|   Reads_WithoutCompression | 1,175.0 ms |  21.58 ms |  19.13 ms | 1,171.8 ms | 39000.0000 | 13000.0000 |         - | 156.28 MB |
+|                     Method |       Mean |    Error |    StdDev |     Median |      Gen 0 |      Gen 1 |     Gen 2 | Allocated |
+|--------------------------- |-----------:|---------:|----------:|-----------:|-----------:|-----------:|----------:|----------:|
+| Inserts_WithoutCompression |   685.6 ms | 73.33 ms | 201.98 ms |   615.5 ms | 52000.0000 | 17000.0000 | 4000.0000 | 217.97 MB |
+|   Reads_WithoutCompression | 1,197.2 ms | 23.69 ms |  26.33 ms | 1,190.0 ms | 38000.0000 | 13000.0000 |         - | 156.28 MB |
 
 ``` ini
 
 BenchmarkDotNet=v0.12.1, OS=Windows 10.0.19041.928 (2004/?/20H1)
 Intel Core i7-7700 CPU 3.60GHz (Kaby Lake), 1 CPU, 8 logical and 4 physical cores
 .NET Core SDK=5.0.300-preview.21180.15
-  [Host]     : .NET Core 5.0.5 (CoreCLR 5.0.521.16609, CoreFX 5.0.521.16609), X64 RyuJIT
-  Job-DSJFXU : .NET Core 5.0.5 (CoreCLR 5.0.521.16609, CoreFX 5.0.521.16609), X64 RyuJIT
+  [Host]     : .NET Core 5.0.6 (CoreCLR 5.0.621.22011, CoreFX 5.0.621.22011), X64 RyuJIT
+  Job-JXJRVC : .NET Core 5.0.6 (CoreCLR 5.0.621.22011, CoreFX 5.0.621.22011), X64 RyuJIT
 
 InvocationCount=1  UnrollFactor=1  
 
