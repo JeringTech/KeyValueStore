@@ -15,9 +15,8 @@ using Xunit;
 
 namespace Jering.KeyValueStore.Tests
 {
- #pragma warning disable CA2012 // Can't await in Parallel.For actions
     /// <summary>
-    /// Verifies behaviour of <see cref="IMixedStorageKVStore{TKey, TValue}"/> implementations and their underlying <see cref="FasterKV{TKey, TValue}"/> instances. They:
+    /// Verifies behaviour of <see cref="MixedStorageKVStore{TKey, TValue}{TKey, TValue}"/> and its underlying <see cref="FasterKV{TKey, TValue}"/> instance. They:
     /// <list type="bullet">
     /// <item>Handle concurrent insert, update, read and delete operations</item>
     /// <item>Handle reference-type and value-type keys and values</item>
@@ -61,6 +60,7 @@ namespace Jering.KeyValueStore.Tests
 
             // Read and verify inserts
             ConcurrentQueue<ValueTask<(Status, DummyClass?)>> readTasks = new();
+#pragma warning disable CA2012 // Can't await in Parallel.For actions
             Parallel.For(0, numRecords, key => readTasks.Enqueue(testSubject.ReadAsync(key)));
             foreach (ValueTask<(Status, DummyClass?)> task in readTasks)
             {
