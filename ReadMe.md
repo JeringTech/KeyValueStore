@@ -29,7 +29,7 @@ var mixedStorageKVStore = new MixedStorageKVStore<int, string>(); // Stores data
 // Insert
 await mixedStorageKVStore.UpsertAsync(0, "dummyString1").ConfigureAwait(false); // Insert a key-value pair (aka record)
 
-// Read
+// Verify inserted
 (Status status, string? result) = await mixedStorageKVStore.ReadAsync(0).ConfigureAwait(false);
 Assert.Equal(Status.OK, status); // Status.NOTFOUND if no record with key 0
 Assert.Equal("dummyString1", result);
@@ -52,20 +52,7 @@ Assert.Null(result);
 ```
 
 This library is a wrapper of Microsoft's [Faster key-value store](https://github.com/microsoft/FASTER). Faster is a low-level key-value store that introduces a novel, lock-free concurrency system. 
-To use this library, you'll need a basic understanding of Faster. Refer to [Faster Basics](#faster-basics) for a quick primer and an overview of features this library provides on top of Faster. 
-
-You might be wondering whether to use this library or plain Faster. This library has disadvantage:
-
-- `MixedStorageKVStore`, isn't as optimized as a custom `FasterKV` instance could be
-- At present, it only wraps a subset of Faster's features 
-
-That said, `MixedStorageKVStore`:
-
-- [Performs well](#performance) relative to non-Faster [alternatives](#alternatives)
-- Is [trivial to use](#usage)
-- Indirectly exposes Faster features that it does not wrap (see [`MixedStorageKVStore.FasterKV](#mixedstoragekvstoretkey-tvalue-class) and [manual Faster configuration](#advanced-configuration))
-
-This library is decent way to get started with Faster. If/when performance bottlenecks in your applications surface, you can transition to custom `FasterKV` instances.
+You'll need a basic understanding of Faster to use this library. Refer to [Faster Basics](#faster-basics) for a quick primer and an overview of features this library provides on top of Faster. 
 
 ## Target Frameworks
 - .NET Standard 2.1
@@ -87,16 +74,17 @@ Using .Net CLI:
 
 ## Usage
 ### Key and Value Types
-You can use any type [MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) serializes as a `MixedStorageKVStore` key or value type.  
+[MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) must be able to serialize `MixedStorageKVStore` key and value types.  
 
-This includes [built-in types](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) and custom types annotated according to 
+The list of types MessagePack C# can serialize includes [built-in types](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) and custom types annotated according to 
 [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization).  
 
 #### Common Key and Value Types
 The following are examples of common key and value types. 
 
 ##### Reference Types
-Here's a custom reference-type annotated according to MessagePack C# conventions:
+The following custom-reference-type is annotated according to MessagePack C# conventions:
+
 ```csharp
 [MessagePackObject] // MessagePack C# attribute
 public class DummyClass
@@ -139,7 +127,7 @@ Assert.Equal(dummyClassInstance.DummyInt, result!.DummyInt);
 Assert.Equal(dummyClassInstance.DummyIntArray, result!.DummyIntArray);
 ```
 ##### Value Types
-Here's a custom value-type annotated according to MessagePack C# conventions:
+The following custom-value-type is annotated according to MessagePack C# conventions:
 ```csharp
 [MessagePackObject]
 public struct DummyStruct
@@ -184,9 +172,9 @@ Assert.Equal(dummyStructInstance.DummyLong, result.DummyLong);
 ```
 
 #### Mutable Object Type as Key Type
-Under-the-hood, the binary serialized form of what you pass as keys are the actual keys.
-This means caution is required if you specify a mutable object type as your key type.
-For example, consider the situation where you insert a value using a `DummyClass` (defined [above](https://github.com/JeringTech/KeyValueStore#common-key-and-value-types)) instance as key, and then change a member of the instance. 
+The binary serialized form of values you pass as keys are the actual keys.
+This means caution is required when using a mutable type as your key type.
+For example, consider the situation where you insert a value using a `DummyClass` (defined [above](#common-key-and-value-types)) instance as key, and then change a member of the instance. 
 When you try to read the value using the same instance, you either read nothing or a different value:
 
 ```csharp
@@ -271,7 +259,7 @@ foreach (ValueTask<(Status, string?)> task in readTasks)
 ```
 
 ### Configuring `MixedStorageKVStore`
-To configure a `MixedStorageKVStore`, pass a `MixedStorageKVStoreOptions` instance to it on instantiation:
+To configure a `MixedStorageKVStore`, pass it a `MixedStorageKVStoreOptions` instance:
 
 ```csharp
 var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
@@ -283,18 +271,18 @@ var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
 ```
 
-You can find the full list of options in the API section: [MixedStorageKVStoreOptions](#mixedstoragekvstoreoptions-class).
+We've listed all of the options in the API section: [MixedStorageKVStoreOptions](#mixedstoragekvstoreoptions-class).
 
 #### Advanced Configuration
-For more control over Faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore`:
+Pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore` for more control over Faster:
 
 ```csharp
-var logSettings = new LogSettings()
+var logSettings = new LogSettings() // Faster options type
 {
     // Set options
     ...
 };
-var fasterKV = new FasterKV<SpanByte, SpanByte>(1L << 20, logSettings));
+var fasterKV = new FasterKV<SpanByte, SpanByte>(1L << 20, logSettings)); // Manually configured FasterKV
 var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 {
     // Set options
@@ -305,14 +293,17 @@ var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVSto
 ```
 
 ### On-Disk Data
-This section is an overview of how data is written to and stored on disk. Some basics:
+`MixedStorageKVStore` stores data across memory and disk. This section briefly covers on-disk data.
 
-- When is data written to disk? `MixedStorageKVStore` stores data across memory and disk. Data is written to disk when
+- When is data written to disk? `MixedStorageKVStore` writes to disk when
 the in-memory region of your store is full. You can configure the size of the in-memory region using 
 [`MixedStorageKVStoreOptions.MemorySizeBits`](#mixedstoragekvstoreoptions-class).
 
-- Where is on-disk data located? By default, `<temp path>/FasterLogs`, where `<temp path>` is the value returned by `Path.GetTempPath()`. 
+- Where is on-disk data located? By default, it is located in `<temp path>/FasterLogs`, where `<temp path>` is the value returned by `Path.GetTempPath()`. 
 You can specify `<temp path>` using [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions-class).
+
+- Can I recreate a `MixedStorageKVStore` from on-disk data? You can do this using Faster's checkpointing system. This library
+doesn't wrap the system, so you'll have to do it manually.
 
 The following example writes data to disk:
 
@@ -335,13 +326,13 @@ You will find a file in `<temp path>/FasterLogs` named `<guid>.log.0`. An exampl
 `C:/Users/UserName/AppData/Local/Temp/FasterLogs/836b4239-ab56-4fa8-b3a5-833cbd198044.log.0`.
 
 #### Managing Files
-By default, files are deleted on `MixedStorageKVStore` disposal or finalization.
-If your program terminates abruptly, files may not get deleted.
+By default, `MixedStorageKVStore` deletes files on disposal or finalization.
+If your program terminates abruptly, `MixedStorageKVStore` may not delete files.
 We suggest:
 
 - Placing all files in the same directory. Do this by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions-class) for all `MixedStorageKVStore`s. This is the default behaviour:
   all files are placed in `<temp path>/FasterLogs`.
-- On application initialization, if the directory exists, delete it.
+- On application initialization, delete the directory if it exists:
     ```csharp
     try
     {
@@ -354,9 +345,8 @@ We suggest:
     ```
 
 #### Managing Disk Space
-While `MixedStorageKVStore` performs [log compaction](log-compaction) periodically, data can only be so compact. So long as you're adding new records, 
-the size of your data can grow boundlessly. Therefore, we recommend monitoring disk space the same way you would monitor memory or CPU usage. For example, if you're 
-using a cloud VM, consider setting an alerts for disk space.
+`MixedStorageKVStore` performs [log compaction](log-compaction) periodically, however, data can only be so compact - the size of your data can grow boundlessly as long as you're adding new records. 
+Therefore, we recommend monitoring disk space the same way you would monitor any other metric.
 
 ## API
 <!-- MixedStorageKVStore generated docs -->
