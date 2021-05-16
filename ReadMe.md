@@ -73,6 +73,13 @@ Using .Net CLI:
 ```
 
 ## Usage
+This section explains how to use this library. Topics:
+
+[Key and Value Types](#key-and-value-types)  
+[Concurrency](#concurrency)  
+[Configuration](#configuration)  
+[On-Disk Data](#on-disk-data)
+
 ### Key and Value Types
 [MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) must be able to serialize `MixedStorageKVStore` key and value types.  
 
@@ -102,7 +109,7 @@ public class DummyClass
     public int[]? DummyIntArray { get; set; }
 }
 ```
-We can use it, together with the built-in reference type `string` as value and key types:
+We can use it, together with the built-in reference type `string` as key and value types:
 ```csharp
 var mixedStorageKVStore = new MixedStorageKVStore<string, DummyClass>(); // string key, DummyClass value
 var dummyClassInstance = new DummyClass()
@@ -145,7 +152,7 @@ public struct DummyStruct
     public long DummyLong { get; set; }
 }
 ```
-We can use it, together with the built-in reference type `int` as value and key types:
+We can use it, together with the built-in value type `int` as key and value types:
 ```csharp
 var mixedStorageKVStore = new MixedStorageKVStore<int, DummyStruct>(); // int key, DummyStruct value
 var dummyStructInstance = new DummyStruct()
@@ -171,10 +178,14 @@ Assert.Equal(dummyStructInstance.DummyInt, result.DummyInt);
 Assert.Equal(dummyStructInstance.DummyLong, result.DummyLong);
 ```
 
-#### Mutable Object Type as Key Type
-The binary serialized form of values you pass as keys are the actual keys.
-This means caution is required when using a mutable type as your key type.
-For example, consider the situation where you insert a value using a `DummyClass` (defined [above](#common-key-and-value-types)) instance as key, and then change a member of the instance. 
+#### Mutable Type as Key Type
+Before we conclude this section on key and value types, a word of caution on using mutable types (type with members you can modify after creation)
+as key types:  
+
+Under-the-hood, the binary serialized form of what you pass as keys are the actual keys.
+This means that if you pass an instance of a mutable type as a key, then modify a member, you can no longer use it retrieve the original record.  
+
+For example, consider the situation where you insert a value using a `DummyClass` instance (defined [above](#common-key-and-value-types)) as key, and then change a member of the instance. 
 When you try to read the value using the same instance, you either read nothing or a different value:
 
 ```csharp
@@ -202,8 +213,8 @@ Assert.Null(result);
 We suggest avoiding mutable object types as key types.
 
 ### Concurrency
-`MixedStorageKVStore.UpsertAsync`, `MixedStorageKVStore.DeleteAsync` and `MixedStorageKVStore.ReadAsync` are thread-safe.
-Example usage in highly concurrent logic:
+You can use `MixedStorageKVStore.UpsertAsync`, `MixedStorageKVStore.DeleteAsync` and `MixedStorageKVStore.ReadAsync` in multi-threaded
+situations. Some example usage:
 
 ```csharp
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>();
@@ -258,34 +269,34 @@ foreach (ValueTask<(Status, string?)> task in readTasks)
 }
 ```
 
-### Configuring `MixedStorageKVStore`
+### Configuration
 To configure a `MixedStorageKVStore`, pass it a `MixedStorageKVStoreOptions` instance:
 
 ```csharp
 var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 {
-    // Set options
+    // Specify options
     LogDirectory = "my/log/directory",
     ...
 };
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions);
 ```
 
-We've listed all of the options in the API section: [MixedStorageKVStoreOptions](#mixedstoragekvstoreoptions-class).
+We've listed all of the options in the API section: [`MixedStorageKVStoreOptions`](#mixedstoragekvstoreoptions-class).
 
 #### Advanced Configuration
-Pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore` for more control over Faster:
+If you want greater control over faster, you can pass a manually configured `FasterKV<SpanByte, SpanByte>` instance to `MixedStorageKVStore`:
 
 ```csharp
 var logSettings = new LogSettings() // Faster options type
 {
-    // Set options
+    // Specify options
     ...
 };
 var fasterKV = new FasterKV<SpanByte, SpanByte>(1L << 20, logSettings)); // Manually configured FasterKV
 var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 {
-    // Set options
+    // Specify options
     LogDirectory = "my/log/directory",
     ...
 };
