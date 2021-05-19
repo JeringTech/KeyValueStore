@@ -24,10 +24,10 @@ Jering.KeyValueStore enables you to store key-value data across memory and disk.
 Usage:
 
 ```csharp
-var mixedStorageKVStore = new MixedStorageKVStore<int, string>(); // Stores data across memory (primary storage) and disk (secondary storage), hence "mixed storage"
+var mixedStorageKVStore = new MixedStorageKVStore<int, string>(); // Stores data across memory (primary storage) and disk (secondary storage)
 
 // Insert
-await mixedStorageKVStore.UpsertAsync(0, "dummyString1").ConfigureAwait(false); // Insert a key-value pair (aka record)
+await mixedStorageKVStore.UpsertAsync(0, "dummyString1").ConfigureAwait(false); // Insert a key-value pair (record)
 
 // Verify inserted
 (Status status, string? result) = await mixedStorageKVStore.ReadAsync(0).ConfigureAwait(false);
@@ -75,13 +75,13 @@ Using .Net CLI:
 ## Usage
 This section explains how to use this library. Topics:
 
-[Key and Value Types](#key-and-value-types)  
-[Concurrency](#concurrency)  
-[Configuration](#configuration)  
-[On-Disk Data](#on-disk-data)
+[Choosing Key and Value Types](#choosing-key-and-value-types)  
+[Using This Library in Highly Concurrent Logic](#using-this-library-in-highly-concurrent-logic)  
+[Configuring](#configuring)  
+[Creating and Managing On-Disk Data](#creating-and-managing-on-disk-data)
 
-### Key and Value Types
-[MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) must be able to serialize `MixedStorageKVStore` key and value types.  
+### Choosing Key and Value Types
+[MessagePack C#](https://github.com/neuecc/MessagePack-CSharp) must be able to serialize your `MixedStorageKVStore` key and value types.  
 
 The list of types MessagePack C# can serialize includes [built-in types](https://github.com/neuecc/MessagePack-CSharp#built-in-supported-types) and custom types annotated according to 
 [MessagePack C# conventions](https://github.com/neuecc/MessagePack-CSharp#object-serialization).  
@@ -90,7 +90,7 @@ The list of types MessagePack C# can serialize includes [built-in types](https:/
 The following are examples of common key and value types. 
 
 ##### Reference Types
-The following custom-reference-type is annotated according to MessagePack C# conventions:
+The following custom reference type is annotated according to MessagePack C# conventions:
 
 ```csharp
 [MessagePackObject] // MessagePack C# attribute
@@ -134,7 +134,7 @@ Assert.Equal(dummyClassInstance.DummyInt, result!.DummyInt);
 Assert.Equal(dummyClassInstance.DummyIntArray, result!.DummyIntArray);
 ```
 ##### Value Types
-The following custom-value-type is annotated according to MessagePack C# conventions:
+The following custom value-type is annotated according to MessagePack C# conventions:
 ```csharp
 [MessagePackObject]
 public struct DummyStruct
@@ -212,8 +212,8 @@ Assert.Null(result);
 
 We suggest avoiding mutable object types as key types.
 
-### Concurrency
-You can use `MixedStorageKVStore.UpsertAsync`, `MixedStorageKVStore.DeleteAsync` and `MixedStorageKVStore.ReadAsync` in multi-threaded
+### Using This Library in Highly Concurrent Logic
+`MixedStorageKVStore.UpsertAsync`, `MixedStorageKVStore.DeleteAsync` and `MixedStorageKVStore.ReadAsync` are thread-safe and suitable for highly concurrent situations
 situations. Some example usage:
 
 ```csharp
@@ -269,7 +269,7 @@ foreach (ValueTask<(Status, string?)> task in readTasks)
 }
 ```
 
-### Configuration
+### Configuring
 To configure a `MixedStorageKVStore`, pass it a `MixedStorageKVStoreOptions` instance:
 
 ```csharp
@@ -303,15 +303,15 @@ var mixedStorageKVStoreOptions = new MixedStorageKVStoreOptions()
 var mixedStorageKVStore = new MixedStorageKVStore<int, string>(mixedStorageKVStoreOptions, fasterKVStore: fasterKV);
 ```
 
-### On-Disk Data
+### Creating and Managing On-Disk Data
 `MixedStorageKVStore` stores data across memory and disk. This section briefly covers on-disk data.
 
 - When is data written to disk? `MixedStorageKVStore` writes to disk when
 the in-memory region of your store is full. You can configure the size of the in-memory region using 
-[`MixedStorageKVStoreOptions.MemorySizeBits`](#mixedstoragekvstoreoptions-class).
+[`MixedStorageKVStoreOptions.MemorySizeBits`](#MixedStorageKVStoreOptionsMemorySizeBits).
 
 - Where is on-disk data located? By default, it is located in `<temp path>/FasterLogs`, where `<temp path>` is the value returned by `Path.GetTempPath()`. 
-You can specify `<temp path>` using [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions-class).
+You can specify `<temp path>` using [`MixedStorageKVStoreOptions.LogDirectory`](#MixedStorageKVStoreOptionsLogDirectory).
 
 - Can I recreate a `MixedStorageKVStore` from on-disk data? You can do this using Faster's checkpointing system. This library
 doesn't wrap the system, so you'll have to do it manually.
@@ -341,7 +341,7 @@ By default, `MixedStorageKVStore` deletes files on disposal or finalization.
 If your program terminates abruptly, `MixedStorageKVStore` may not delete files.
 We suggest:
 
-- Placing all files in the same directory. Do this by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](#mixedstoragekvstoreoptions-class) for all `MixedStorageKVStore`s. This is the default behaviour:
+- Placing all files in the same directory. Do this by specifying the same [`MixedStorageKVStoreOptions.LogDirectory`](#MixedStorageKVStoreOptionsLogDirectory) for all `MixedStorageKVStore`s. This is the default behaviour:
   all files are placed in `<temp path>/FasterLogs`.
 - On application initialization, delete the directory if it exists:
     ```csharp
@@ -356,7 +356,7 @@ We suggest:
     ```
 
 #### Managing Disk Space
-`MixedStorageKVStore` performs [log compaction](log-compaction) periodically, however, data can only be so compact - the size of your data can grow boundlessly as long as you're adding new records. 
+`MixedStorageKVStore` performs log compaction periodically, however, data can only be so compact - the size of your data can grow boundlessly as long as you're adding new records. 
 Therefore, we recommend monitoring disk space the same way you would monitor any other metric.
 
 ## API
@@ -753,18 +753,18 @@ await mixedStorageKeyValueStore.UpsertAsync().ConfigureAwait(false); // Thread-s
 
 #### Serialization
 Faster differentiates between fixed-length types (primitives, structs with only primitive members etc),
-and variable-length types (objects like strings, custom classes etc).
+and variable-length types (reference types, structs with variable-length members etc).
 
 By default, `FasterKV` serializes variable-length types using [`DataContractSerializer`](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.serialization.datacontractserializer?view=net-5.0),
-a slow, space-inefficient XML serializer. It then writes serialized variable-length data to a secondary log, the "object log".
-Use of the object log significantly slows down both writes and reads.
+a slow, space-inefficient XML serializer. It writes serialized variable-length data to a secondary log, the "object log".
+Use of the object log slows down reads and writes.
 
-To avoid the object log, the Faster team added `SpanByte`. 
-`SpanByte` is a struct that can be thought of as a wrapper for "integer specifying data length" + "serialized variable-length data".
-If a `FasterKV` instance is instantiated with `Spanbyte` in place of variable length types, for example, `FasterKV<int, SpanByte>`
-instead of `FasterKV<int, DummyClass>`, *all data* is written to the primary log.  
+To keep all data in the primary log, the Faster team added the `SpanByte` struct. 
+`SpanByte` can be thought of as a wrapper for "integer specifying data length" + "serialized variable-length data".
+If a `FasterKV` instance is instantiated with `Spanbyte` in place of variable-length types, for example, `FasterKV<int, SpanByte>`
+instead of `FasterKV<int, DummyClass>`, *all data* is written to the primary log. 
 
-While this avoids the object log, it means you need to manually serialize variable-length types and instantiate `SpanByte`s around the resultant data.  
+To use `SpanByte`, you need to manually serialize variable-length types and instantiate `SpanByte`s around the resultant data.  
 
 `MixedStorageKeyValueStore` abstracts all that away: 
 ```csharp
@@ -777,7 +777,7 @@ var mixedStorageKVStore = new MixedStorageKVStore<int, DummyClass>();
 mixedStorageKVStore.Upsert(0, dummyClassInstance); 
 ```
 
-Note: The object log is not a great general solution, but it is faster if most of the log is in memory.
+Note: Writing to the object log is more performant than the `SpanByte` system when most of the log is in memory.
 Supporting object log for such situations is listed under [Future Performance Improvements](#future-performance-improvements).
 
 ## Contributing

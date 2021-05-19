@@ -14,5 +14,4 @@ jobs:
     codecovKey: "67424e1a-1c96-4db4-8874-bfa35e2d302c"
 - template: templates/docs/main.yml@templates
   parameters:
-    nugetRestoreEndpoints: "https://pkgs.dev.azure.com/JeremyTCD/_packaging/Main/nuget/v2"
     nugetRestorePats: "$(nugetRestorePats)"

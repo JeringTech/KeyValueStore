@@ -19,10 +19,8 @@ namespace Jering.KeyValueStore.Performance
     [MemoryDiagnoser]
     public class LowMemoryUsageBenchmarks
     {
-#pragma warning disable CS8618
-        private MixedStorageKVStore<int, DummyClass> _mixedStorageKVStore;
-        private MixedStorageKVStoreOptions _mixedStorageKVStoreOptions;
-#pragma warning restore CS8618
+        private MixedStorageKVStore<int, DummyClass>? _mixedStorageKVStore;
+        private MixedStorageKVStoreOptions? _mixedStorageKVStoreOptions;
         private const int NUM_INSERT_OPERATIONS = 350_000;
         private const int NUM_READ_OPERATIONS = 75_000;
         private readonly ConcurrentQueue<ValueTask<(Status, DummyClass?)>> _readTasks = new();
@@ -59,14 +57,14 @@ namespace Jering.KeyValueStore.Performance
         [Benchmark]
         public async Task Inserts_WithoutCompression()
         {
-            Parallel.For(0, NUM_INSERT_OPERATIONS, key => _upsertTasks.Enqueue(_mixedStorageKVStore.UpsertAsync(key, _dummyClassInstance)));
+            Parallel.For(0, NUM_INSERT_OPERATIONS, key => _upsertTasks.Enqueue(_mixedStorageKVStore!.UpsertAsync(key, _dummyClassInstance)));
             await Task.WhenAll(_upsertTasks).ConfigureAwait(false);
         }
 
         [IterationCleanup(Target = nameof(Inserts_WithoutCompression))]
         public void Inserts_WithoutCompression_IterationCleanup()
         {
-            _mixedStorageKVStore.Dispose();
+            _mixedStorageKVStore?.Dispose();
         }
 
         // Concurrent reads without compression
@@ -94,7 +92,9 @@ namespace Jering.KeyValueStore.Performance
         [Benchmark]
         public async Task Reads_WithoutCompression()
         {
-            Parallel.For(0, NUM_READ_OPERATIONS, key => _readTasks.Enqueue(_mixedStorageKVStore.ReadAsync(key)));
+#pragma warning disable CA2012 // Use ValueTasks correctly
+            Parallel.For(0, NUM_READ_OPERATIONS, key => _readTasks.Enqueue(_mixedStorageKVStore!.ReadAsync(key)));
+#pragma warning restore CA2012 // Use ValueTasks correctly
             foreach (ValueTask<(Status, DummyClass?)> task in _readTasks)
             {
                 if (task.IsCompleted)

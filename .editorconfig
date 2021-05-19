@@ -15,8 +15,14 @@ tab_width = 4
 end_of_line = lf
 insert_final_newline = true
 
-# Analyzers
 [*.cs]
+# Analyzers
+dotnet_diagnostic.RS2000.severity = none
+dotnet_diagnostic.RS2008.severity = none
+
+# Substring
+dotnet_diagnostic.IDE0057.severity = none
+
 # var
 dotnet_diagnostic.IDE0007.severity = error
 dotnet_diagnostic.IDE0008.severity = error
